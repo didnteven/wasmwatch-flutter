@@ -1,0 +1,22 @@
+library wasmwatch;
+
+export 'src/client.dart';
+export 'src/wasmwatch.dart';
+export 'src/event/breadcrumb.dart';
+export 'src/event/envelope.dart';
+export 'src/event/error_event.dart';
+export 'src/event/user.dart';
+export 'src/hub.dart';
+export 'src/integrations/flutter_error.dart';
+export 'src/integrations/navigator_observer.dart';
+export 'src/integrations/zone_integration.dart';
+export 'src/options.dart';
+export 'src/scope.dart';
+export 'src/transport/http_transport.dart';
+export 'src/transport/offline_buffer.dart';
+export 'src/transport/rate_limiter.dart';
+export 'src/utils/fingerprinter.dart';
+export 'src/utils/pii_scrubber.dart';
+export 'src/wasm/debug_id.dart';
+export 'src/wasm/stack_frame_parser.dart';
+export 'src/wasm/loader_check.dart';

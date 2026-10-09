@@ -1,0 +1,1 @@
+String? getWindowRelease() => null;

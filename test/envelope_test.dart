@@ -1,0 +1,33 @@
+import 'dart:convert';
+import 'package:test/test.dart';
+import 'package:wasmwatch/wasmwatch.dart';
+
+void main() {
+  test('builds exactly three JSON records and uses UTF-8 byte length', () {
+    final event = ErrorEvent(
+      eventId: '0193f04a-1234-7abc-9def-0123456789ab',
+      timestamp: DateTime.utc(2025),
+      exceptionType: 'StateError', exceptionValue: 'é',
+      frames: [RawStackFrame.raw(rawLine: 'opaque')],
+      debugMeta: const DebugMeta(images: [DebugImage(debugId: '0193f05e-7d4c-7b2a-8f3a-1c2d3e4f5a6b', codeFile: 'main.dart.wasm', offsetKind: WasmOffsetKind.unknown)]),
+    );
+    final wire = Envelope(event: event, sdkVersion: '0.1.0').serialize();
+    final records = wire.trimRight().split('\n');
+    expect(records, hasLength(3));
+    expect(jsonDecode(records[1])['length'], utf8.encode(records[2]).length);
+  });
+
+  test('keeps an all-digit debug id intact while still scrubbing the message', () {
+    const zeroId = '00000000-0000-7000-8000-000000000000';
+    final event = ErrorEvent(
+      eventId: '0193f04a-1234-7abc-9def-0123456789ab',
+      timestamp: DateTime.utc(2025),
+      exceptionType: 'StateError', exceptionValue: 'card 4111 1111 1111 1111',
+      frames: [RawStackFrame.raw(rawLine: 'opaque')],
+      debugMeta: const DebugMeta(images: [DebugImage(debugId: zeroId, codeFile: 'main.dart.wasm', offsetKind: WasmOffsetKind.unknown)]),
+    );
+    final json = jsonEncode(event.toJson());
+    expect(json, contains(zeroId));
+    expect(json, isNot(contains('4111')));
+  });
+}
