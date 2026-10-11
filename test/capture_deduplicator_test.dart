@@ -1,3 +1,4 @@
+import 'package:wasmwatch/src/utils/consecutive_loop_guard.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:wasmwatch/src/web/capture_deduplicator.dart';
 import 'package:wasmwatch/src/web/browser_error_hooks_stub.dart';
@@ -5,6 +6,16 @@ import 'package:wasmwatch/wasmwatch.dart';
 
 void main() {
   final now = DateTime.utc(2026);
+  test('content guard preserves independent cross-hook suppression', () {
+    final identity = CaptureDeduplicator();
+    final content = ConsecutiveLoopGuard();
+    final error = Object();
+    expect(content.record('Error', 'boom', 'stack', null, now), false);
+    expect(identity.record(error, 'boom', 'stack', now), false);
+    expect(content.record('Error', 'B', 'other', null, now), false);
+    expect(content.record('Error', 'boom', 'stack', null, now), false);
+    expect(identity.record(error, 'boom', 'stack', now, browser: true), true);
+  });
   test('shares a two-second window across capture paths', () {
     final buffer = CaptureDeduplicator();
     expect(buffer.record(Object(), 'StateError: boom', 'stack', now), false);

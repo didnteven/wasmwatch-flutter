@@ -9,6 +9,7 @@ import 'transport/http_transport.dart';
 import 'transport/offline_buffer.dart';
 import 'transport/rate_limiter.dart';
 import 'utils/exception_type.dart';
+import 'utils/consecutive_loop_guard.dart';
 import 'utils/fingerprinter.dart';
 import 'wasm/debug_id.dart';
 import 'wasm/stack_frame_parser.dart';
@@ -18,17 +19,25 @@ class WasmWatchClient {
   WasmWatchClient(WasmWatchOptions options,
       {HttpTransport? transport,
       OfflineBuffer? offlineBuffer,
-      RateLimiter? rateLimiter})
+      RateLimiter? rateLimiter,
+      DateTime Function()? clock})
       : options = options.resolved(),
         transport = transport ??
             HttpTransport(options.parsedDsn, maxRetries: options.maxRetries),
         offlineBuffer = offlineBuffer,
-        rateLimiter = rateLimiter ?? RateLimiter();
+        rateLimiter = rateLimiter ?? RateLimiter(),
+        _clock = clock ?? DateTime.now;
 
   WasmWatchOptions options;
   final HttpTransport transport;
   final OfflineBuffer? offlineBuffer;
   final RateLimiter rateLimiter;
+  final DateTime Function() _clock;
+  final _loopGuard = ConsecutiveLoopGuard();
+  bool _constructing = false;
+  int captureAttempts = 0;
+  int consecutiveDrops = 0;
+  int sessionCapDrops = 0;
   final _deduplicator = CaptureDeduplicator();
   static final internalCaptureZoneKey = Object();
   static bool get isInternalCapture =>
@@ -59,72 +68,103 @@ class WasmWatchClient {
     bool browserCapture = false,
     bool trimRecursion = false,
   }) async {
-    final now = DateTime.now();
-    final exceptionType = exceptionTypeOverride ?? describeExceptionType(error);
-    final exceptionValue =
-        exceptionValueOverride ?? describeExceptionValue(error, exceptionType);
-    if (_deduplicator.record(error, exceptionValue, stackTrace?.toString(), now,
-        browser: browserCapture)) return null;
-    if (!rateLimiter.allow(now) || Random().nextDouble() > options.sampleRate)
-      return null;
-    // Flutter layout diagnostics do not always carry the stack that produced
-    // them.  Retain the capture-time stack for operational evidence, but mark
-    // it so a receiver never presents captureException as the throw site.
-    final usedCaptureTimeStack = stackTrace == null && captureStackWhenMissing;
-    var frames = WasmStackFrameParser.parse(
-        (stackTrace ?? StackTrace.current).toString());
-    if (trimRecursion) {
-      final seen = <String>{};
-      frames = frames
-          .where((frame) => seen.add(frame.rawLine.trim()))
-          .take(50)
-          .toList();
-    }
-    frames = frames.take(200).toList();
-    final activeScope = scope ?? hub?.scope ?? Scope();
-    String? symbol;
-    for (final frame in frames) {
-      if (frame.type != StackFrameType.raw && frame.functionName != null) {
-        symbol = frame.functionName;
-        break;
+    if (isInternalCapture || _constructing) return null;
+    _constructing = true;
+    try {
+      final now = _clock();
+      final exceptionType =
+          exceptionTypeOverride ?? describeExceptionType(error);
+      final exceptionValue = exceptionValueOverride ??
+          describeExceptionValue(error, exceptionType);
+      if (!options.bypassProtection &&
+          _loopGuard.record(
+              exceptionType,
+              exceptionValue,
+              stackTrace?.toString(),
+              tags['wasmwatch.widget_origin'] ??
+                  contexts['flutter_layout']?.toString(),
+              now)) {
+        consecutiveDrops++;
+        return null;
       }
+      if (_deduplicator.record(
+          error, exceptionValue, stackTrace?.toString(), now,
+          browser: browserCapture)) return null;
+      if (!options.bypassProtection) {
+        if (captureAttempts >= options.maxEventsPerSession) {
+          sessionCapDrops++;
+          return null;
+        }
+        captureAttempts++;
+        if (!rateLimiter.allow(now) ||
+            Random().nextDouble() > options.sampleRate) return null;
+      }
+      // Flutter layout diagnostics do not always carry the stack that produced
+      // them.  Retain the capture-time stack for operational evidence, but mark
+      // it so a receiver never presents captureException as the throw site.
+      final usedCaptureTimeStack =
+          stackTrace == null && captureStackWhenMissing;
+      var frames = WasmStackFrameParser.parse(
+          (stackTrace ?? StackTrace.current).toString());
+      if (trimRecursion) {
+        final seen = <String>{};
+        frames = frames
+            .where((frame) => seen.add(frame.rawLine.trim()))
+            .take(50)
+            .toList();
+      }
+      frames = frames.take(200).toList();
+      final activeScope = scope ?? hub?.scope ?? Scope();
+      String? symbol;
+      for (final frame in frames) {
+        if (frame.type != StackFrameType.raw && frame.functionName != null) {
+          symbol = frame.functionName;
+          break;
+        }
+      }
+      final event = ErrorEvent(
+        eventId: _uuidV7(now),
+        timestamp: now,
+        platform: _platform(),
+        release: options.release,
+        environment: options.environment,
+        exceptionType: exceptionType,
+        mechanism: mechanism,
+        exceptionValue:
+            hint == null ? exceptionValue : '$hint: $exceptionValue',
+        frames: frames,
+        debugMeta: debugMeta ?? _defaultDebugMeta(),
+        breadcrumbs:
+            activeScope.breadcrumbs.take(options.maxBreadcrumbs).toList(),
+        contexts: {...activeScope.contexts, ...contexts},
+        tags: {
+          ...activeScope.tags,
+          ...tags,
+          if (usedCaptureTimeStack) 'wasmwatch.stack_trace_origin': 'capture',
+        },
+        extra: activeScope.extra,
+        user: activeScope.user,
+        fingerprint: Fingerprinter.fingerprint(
+            exceptionType: exceptionType, culpritSymbol: symbol),
+      );
+      return _runInternal(() async {
+        final processed = options.beforeSend == null
+            ? event
+            : await (captureZone ?? Zone.current).fork(zoneValues: {
+                internalCaptureZoneKey: true
+              }).run(() => options.beforeSend!(event));
+        if (processed == null) return null;
+        final envelope =
+            Envelope(event: processed, sdkVersion: '0.1.0').serialize();
+        await flushOffline();
+        final sent = await transport.send(envelope);
+        if (!sent && transport.shouldBuffer(envelope) && offlineBuffer != null)
+          await offlineBuffer!.store(envelope);
+        return processed.eventId;
+      });
+    } finally {
+      _constructing = false;
     }
-    final event = ErrorEvent(
-      eventId: _uuidV7(now),
-      timestamp: now,
-      platform: _platform(),
-      release: options.release,
-      environment: options.environment,
-      exceptionType: exceptionType,
-      mechanism: mechanism,
-      exceptionValue: hint == null ? exceptionValue : '$hint: $exceptionValue',
-      frames: frames,
-      debugMeta: debugMeta ?? _defaultDebugMeta(),
-      breadcrumbs:
-          activeScope.breadcrumbs.take(options.maxBreadcrumbs).toList(),
-      contexts: {...activeScope.contexts, ...contexts},
-      tags: {
-        ...activeScope.tags,
-        ...tags,
-        if (usedCaptureTimeStack) 'wasmwatch.stack_trace_origin': 'capture',
-      },
-      extra: activeScope.extra,
-      user: activeScope.user,
-      fingerprint: Fingerprinter.fingerprint(
-          exceptionType: exceptionType, culpritSymbol: symbol),
-    );
-    return _runInternal(() async {
-      final processed = options.beforeSend == null
-          ? event
-          : await (captureZone ?? Zone.current)
-              .run(() => options.beforeSend!(event));
-      if (processed == null) return null;
-      final envelope =
-          Envelope(event: processed, sdkVersion: '0.1.0').serialize();
-      final sent = await transport.send(envelope);
-      if (!sent && offlineBuffer != null) await offlineBuffer!.store(envelope);
-      return processed.eventId;
-    });
   }
 
   Future<void> flushOffline() => _runInternal(() async {
@@ -133,6 +173,7 @@ class WasmWatchClient {
         final claimed = await buffer.drain();
         for (var index = 0; index < claimed.length; index++) {
           if (!await transport.send(claimed[index])) {
+            if (!transport.shouldBuffer(claimed[index])) continue;
             await buffer.requeue(claimed.sublist(index));
             return;
           }

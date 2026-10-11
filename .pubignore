@@ -1,2 +1,5 @@
+test/contracts/
+test/flutter_error_integration_test.dart
 .dart_tool/
 build/
+scripts/

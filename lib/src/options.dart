@@ -17,15 +17,18 @@ class WasmWatchOptions {
     this.debug = false,
     this.maxBreadcrumbs = 50,
     this.sampleRate = 1,
+    this.maxEventsPerSession = 100,
+    this.protectionBypass,
     this.beforeSend,
     this.enablePiiScrubbing = true,
     this.maxRetries = 3,
     this.captureBrowserErrors = true,
     this.captureUnhandledRejections = true,
     this.ignoreCrossOriginScriptErrors = true,
-  }) : assert(maxBreadcrumbs >= 0 && maxBreadcrumbs <= 50),
-       assert(sampleRate >= 0 && sampleRate <= 1),
-       assert(maxRetries >= 0);
+  })  : assert(maxBreadcrumbs >= 0 && maxBreadcrumbs <= 50),
+        assert(sampleRate >= 0 && sampleRate <= 1),
+        assert(maxRetries >= 0),
+        assert(maxEventsPerSession >= 0);
 
   final String dsn;
   final String? environment;
@@ -45,20 +48,18 @@ class WasmWatchOptions {
     const definedEnvironment = String.fromEnvironment('WASMWATCH_ENVIRONMENT');
     return WasmWatchOptions(
       dsn: dsn ?? this.dsn,
-      release:
-          release ??
+      release: release ??
           this.release ??
           (definedRelease.isNotEmpty ? definedRelease : getWindowRelease()),
-      environment:
-          environment ??
+      environment: environment ??
           this.environment ??
           (definedEnvironment.isNotEmpty
               ? definedEnvironment
               : kReleaseMode
-              ? 'production'
-              : kProfileMode
-              ? 'profile'
-              : 'debug'),
+                  ? 'production'
+                  : kProfileMode
+                      ? 'profile'
+                      : 'debug'),
       autoInstallFlutterErrorHandlers: autoInstallFlutterErrorHandlers,
       captureLifecycleBreadcrumbs: captureLifecycleBreadcrumbs,
       capturePrintBreadcrumbs: capturePrintBreadcrumbs,
@@ -66,6 +67,8 @@ class WasmWatchOptions {
       debug: debug,
       maxBreadcrumbs: maxBreadcrumbs,
       sampleRate: sampleRate,
+      maxEventsPerSession: maxEventsPerSession,
+      protectionBypass: protectionBypass,
       beforeSend: beforeSend,
       enablePiiScrubbing: enablePiiScrubbing,
       maxRetries: maxRetries,
@@ -77,6 +80,14 @@ class WasmWatchOptions {
 
   final int maxBreadcrumbs;
   final double sampleRate;
+
+  /// One initialized client is a session; retries do not reserve attempts.
+  final int maxEventsPerSession;
+
+  /// Defaults to local debug builds. Environment labels cannot disable guards.
+  /// Explicit override supports deterministic tests and local diagnostics.
+  final bool? protectionBypass;
+  bool get bypassProtection => protectionBypass ?? kDebugMode;
   final BeforeSend? beforeSend;
   final bool enablePiiScrubbing;
   final int maxRetries;

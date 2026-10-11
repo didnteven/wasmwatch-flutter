@@ -97,6 +97,26 @@ void main() {
     await WasmWatch.close();
   });
 
+  test('fresh native errors share the production loop guard', () async {
+    hooks.close();
+    client.transport.close();
+    client = WasmWatchClient(WasmWatchOptions(
+        dsn: 'https://key@example.com/v1/project',
+        protectionBypass: false,
+        beforeSend: (event) {
+          events.add(event);
+          return null;
+        }));
+    hooks = BrowserErrorHooks()..install(client);
+    for (var i = 0; i < 20; i++) {
+      final error = NativeError('same loop')
+        ..stack = 'Error: same loop\n at render (main.dart.js:12:34)';
+      dispatchError('same loop', error: error);
+    }
+    await Future<void>.delayed(Duration.zero);
+    expect(events, hasLength(1));
+  });
+
   test('installs once, captures location and leaves default logging enabled',
       () {
     hooks.install(client);

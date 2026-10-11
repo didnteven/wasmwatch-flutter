@@ -1,6 +1,6 @@
 name: wasmwatch
 description: Error tracking for Flutter Web and WebAssembly applications.
-version: 0.1.0
+version: 0.2.0
 homepage: 'https://github.com/didnteven/wasmwatch-flutter'
 repository: 'https://github.com/didnteven/wasmwatch-flutter'
 topics:
