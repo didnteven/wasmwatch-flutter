@@ -61,7 +61,7 @@ class WasmWatch {
     try {
       resolved.parsedDsn;
     } on FormatException catch (error) {
-      throw ArgumentError.value(effectiveDsn, 'dsn', error.message);
+      throw ArgumentError.value(redactDsn(effectiveDsn), 'dsn', error.message);
     }
     if (client != null) client.options = resolved;
     Future<void> start() async {

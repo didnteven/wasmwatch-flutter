@@ -104,6 +104,22 @@ class WasmWatchOptions {
   Dsn get parsedDsn => Dsn.parse(dsn);
 }
 
+/// Prefix of secret artifact upload tokens, which must never appear in a DSN.
+const uploadTokenPrefix = 'wws_';
+
+/// The DSN with an upload token masked, safe for error messages and crash reports.
+String redactDsn(String value) {
+  try {
+    final uri = Uri.parse(value);
+    if (Uri.decodeComponent(uri.userInfo).startsWith(uploadTokenPrefix)) {
+      return uri.replace(userInfo: '${uploadTokenPrefix}***').toString();
+    }
+    return value;
+  } on FormatException {
+    return value.contains(uploadTokenPrefix) ? '<redacted>' : value;
+  }
+}
+
 class Dsn {
   const Dsn({
     required this.endpoint,
@@ -123,6 +139,13 @@ class Dsn {
     final parts = uri.pathSegments.where((part) => part.isNotEmpty).toList();
     if (parts.length < 2) {
       throw FormatException('DSN path must end in /<version>/<project-id>');
+    }
+    // The DSN is compiled into a browser bundle: an upload token (secret) in it would be public.
+    if (Uri.decodeComponent(uri.userInfo).startsWith(uploadTokenPrefix)) {
+      throw const FormatException(
+        'DSN contains an upload token (wws_…); upload tokens must never be '
+        'compiled into an app. Use the project DSN key (wwk_…)',
+      );
     }
     return Dsn(
       endpoint: uri.replace(

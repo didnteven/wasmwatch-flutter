@@ -220,6 +220,39 @@ void main() {
     await expectLater(WasmWatch.init(dsn: 'invalid'), throwsArgumentError);
   });
 
+  group('upload token guard', () {
+    const secret = 'wws_Ab3dSECRETSECRETSECRETx9Zq';
+    const leaked = 'https://$secret@example.com/v1/project';
+
+    test('Dsn.parse refuses a wws_ key but accepts a wwk_ key', () {
+      expect(
+        () => Dsn.parse(leaked),
+        throwsA(
+          isA<FormatException>()
+              .having((e) => e.message, 'message', contains('upload token'))
+              .having((e) => e.message, 'message', isNot(contains(secret))),
+        ),
+      );
+      expect(Dsn.parse('https://wwk_public@example.com/v1/project').publicKey,
+          'wwk_public');
+    });
+
+    test('init fails without echoing the token or running the app', () async {
+      var ran = false;
+      Object? error;
+      try {
+        await WasmWatch.init(dsn: leaked, appRunner: () => ran = true);
+      } catch (e) {
+        error = e;
+      }
+      expect(error, isA<ArgumentError>());
+      expect(error.toString(), contains('upload token'));
+      expect(error.toString(), isNot(contains(secret)));
+      expect(error.toString(), isNot(contains('SECRET')));
+      expect(ran, isFalse);
+    });
+  });
+
   test('missing DSN warns and still runs the application', () async {
     var ran = false;
     final messages = <String>[];
