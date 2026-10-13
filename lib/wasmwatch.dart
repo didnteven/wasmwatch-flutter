@@ -8,6 +8,7 @@ export 'src/event/error_event.dart';
 export 'src/event/user.dart';
 export 'src/hub.dart';
 export 'src/integrations/flutter_error.dart';
+export 'src/integrations/http_tracking.dart';
 export 'src/integrations/navigator_observer.dart';
 export 'src/integrations/zone_integration.dart';
 export 'src/options.dart';

@@ -12,7 +12,7 @@ dependencies:
   wasmwatch:
     git:
       url: https://github.com/didnteven/wasmwatch-flutter.git
-      ref: v0.2.0
+      ref: v0.1.0
 ```
 
 Then run `flutter pub get`.
@@ -65,6 +65,37 @@ try {
 }
 ```
 
+## Track HTTP errors (`http` and Dio)
+
+By default, 5xx responses and transport failures (timeout, connection, CORS)
+are captured as error events; 4xx responses are warning breadcrumbs only.
+Cancellations are never captured. URLs are recorded without query string,
+fragment or credentials.
+
+### `package:http`
+
+```dart
+import 'package:http/http.dart' as http;
+import 'package:wasmwatch/wasmwatch.dart';
+
+final client = WasmWatchHttpClient(http.Client());
+final response = await client.get(Uri.parse('https://api.example.com/items'));
+```
+
+### Dio
+
+`wasmwatch` does not depend on Dio. Copy
+[`example/dio_interceptor.dart`](https://github.com/didnteven/wasmwatch-flutter/blob/main/example/dio_interceptor.dart)
+into your app (it is covered by the SDK tests), then register it:
+
+```dart
+final dio = Dio()..interceptors.add(WasmWatchDioInterceptor());
+```
+
+Pass `HttpErrorTracker(captureServerErrors: false)` or
+`captureTransportErrors: false` to either wrapper to keep those outcomes as
+breadcrumbs only.
+
 ## License
 
 MIT
@@ -100,3 +131,5 @@ server counts them: counts describe admitted observations, not all original
 application throws. Stable application user IDs are needed for identified-user
 breadth; anonymous users remain unknown.
 
+SDK source in this checkout is under `packages/dart-sdk`. This change does not
+publish or push the separate public `didnteven/wasmwatch-flutter` repository.
