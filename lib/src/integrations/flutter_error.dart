@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 import '../client.dart';
+import '../event/breadcrumb.dart';
 
 /// Chains framework and dispatcher handlers. Capture is intentionally detached:
 /// Flutter's synchronous error contract must retain the previous handler's
@@ -12,6 +13,10 @@ class FlutterErrorIntegration {
   /// Zone value used to attach private attribution to a single synchronous
   /// framework or platform capture. Values never enter the shared Scope.
   static final Object eventMetadataZoneKey = Object();
+
+  /// Suppress console breadcrumbs for Flutter's verbose diagnostic report,
+  /// including deferred prints scheduled by the previous handler.
+  static final Object suppressPrintZoneKey = Object();
   static final Expando<Map<String, Object?>> _attachedMetadata =
       Expando<Map<String, Object?>>('WasmWatch Flutter event metadata');
 
@@ -73,12 +78,18 @@ class FlutterErrorIntegration {
       Object? metadata;
       Object? downstreamError;
       StackTrace? downstreamStack;
+      final previousDebugPrint = debugPrint;
       try {
-        _previousFlutter?.call(details);
+        debugPrint = (message, {wrapWidth}) => runZoned(
+            () => debugPrintSynchronously(message, wrapWidth: wrapWidth),
+            zoneValues: {suppressPrintZoneKey: true});
+        runZoned(() => _previousFlutter?.call(details),
+            zoneValues: {suppressPrintZoneKey: true});
       } catch (error, stack) {
         downstreamError = error;
         downstreamStack = stack;
       } finally {
+        debugPrint = previousDebugPrint;
         metadata = _frameworkMetadata?.call(details);
         if (metadata is! Map || metadata.isEmpty) {
           metadata = _takeAttachedMetadata(details.exception) ??
@@ -90,6 +101,21 @@ class FlutterErrorIntegration {
       final eventMetadata = metadata is Map
           ? Map<String, Object?>.from(metadata)
           : const <String, Object?>{};
+      String firstLine;
+      try {
+        firstLine = captured.toString().split(RegExp(r'[\r\n]')).first;
+      } catch (_) {
+        firstLine = '';
+      }
+      final message = '${captured.runtimeType}: $firstLine';
+      client.hub?.scope.addBreadcrumb(
+        Breadcrumb(
+          category: 'flutter.error',
+          level: SeverityLevel.error,
+          message: message.length > 200 ? message.substring(0, 200) : message,
+        ),
+        maximum: client.options.maxBreadcrumbs,
+      );
       client.captureException(
         captured,
         stackTrace: details.stack,

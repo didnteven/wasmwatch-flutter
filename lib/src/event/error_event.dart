@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kIsWasm;
 import '../utils/pii_scrubber.dart';
 import '../wasm/stack_frame_parser.dart';
 import 'breadcrumb.dart';
@@ -91,20 +92,37 @@ class DebugImage {
   const DebugImage({
     required this.debugId,
     required this.codeFile,
-    required this.offsetKind,
+    this.offsetKind = WasmOffsetKind.unknown,
+    this.type = kIsWasm ? 'wasm' : 'js',
+    this.buildId,
+    this.os,
+    this.arch,
+    this.isolateDsoBase,
+    this.vmDsoBase,
     this.release,
     this.debugFile,
   });
   final String debugId;
   final String codeFile;
+  final String type;
+  final String? buildId;
+  final String? os;
+  final String? arch;
+  final String? isolateDsoBase;
+  final String? vmDsoBase;
   final WasmOffsetKind offsetKind;
   final String? release;
   final String? debugFile;
   Map<String, Object?> toJson() => {
-        'type': 'wasm',
+        'type': type,
         'debug_id': debugId,
-        'code_file': codeFile,
-        'offset_kind': offsetKind.wire,
+        'code_file': type == 'js' ? 'main.dart.js' : codeFile,
+        if (type != 'elf') 'offset_kind': offsetKind.wire,
+        if (buildId != null) 'build_id': buildId,
+        if (os != null) 'os': os,
+        if (arch != null) 'arch': arch,
+        if (isolateDsoBase != null) 'isolate_dso_base': isolateDsoBase,
+        if (vmDsoBase != null) 'vm_dso_base': vmDsoBase,
         if (release != null) 'release': release,
         if (debugFile != null) 'debug_file': debugFile,
       };

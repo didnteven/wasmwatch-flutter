@@ -6,6 +6,34 @@ import 'package:wasmwatch/wasmwatch.dart';
 
 void main() {
   final now = DateTime.utc(2026);
+  test('guardCallback captures before rethrow and browser echo is suppressed',
+      () async {
+    final events = <ErrorEvent>[];
+    final client = WasmWatchClient(WasmWatchOptions(
+      dsn: 'https://key@example.com/v1/project',
+      beforeSend: (event) {
+        events.add(event);
+        return null;
+      },
+    ));
+    await WasmWatch.init(client: client);
+    addTearDown(WasmWatch.close);
+    final failure = StateError('callback');
+    StackTrace? caughtStack;
+    try {
+      WasmWatch.guardCallback1<int, void>((value) {
+        throw failure;
+      })(1);
+    } catch (error, stack) {
+      expect(error, same(failure));
+      caughtStack = stack;
+    }
+    expect(events.single.mechanism, {'type': 'js_callback', 'handled': false});
+    await client.captureException(failure,
+        stackTrace: caughtStack, browserCapture: true);
+    expect(events, hasLength(1));
+    expect(WasmWatch.guardCallback(() => 42), 42);
+  });
   test('content guard preserves independent cross-hook suppression', () {
     final identity = CaptureDeduplicator();
     final content = ConsecutiveLoopGuard();

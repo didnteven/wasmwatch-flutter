@@ -3,20 +3,36 @@ import 'dart:async';
 import 'package:http/http.dart' as http;
 
 import '../event/breadcrumb.dart';
+import '../grouping/normalize.dart';
 import '../wasmwatch.dart';
 
 /// Error raised for an HTTP failure that is reported as an event.
 class HttpRequestException implements Exception {
-  const HttpRequestException(this.method, this.url, {this.statusCode, this.cause});
+  const HttpRequestException(this.method, this.url,
+      {this.statusCode, this.cause, this.normalizeHttpPath});
   final String method;
   final String url;
   final int? statusCode;
   final Object? cause;
+  final String Function(Uri)? normalizeHttpPath;
+
+  Map<String, Object?> get requestContext => {
+        'method': method,
+        'url': HttpErrorTracker.sanitizeUrl(Uri.parse(url)),
+        'status_code': statusCode,
+      };
+
+  String get templatedUrl {
+    final uri = Uri.parse(HttpErrorTracker.sanitizeUrl(Uri.parse(url)));
+    final path = normalizeHttpPath?.call(uri) ?? templatePath(uri.path);
+    // Concatenate so braces stay readable rather than becoming percent encoded.
+    return '${uri.hasAuthority ? '${uri.scheme}://${uri.authority}' : ''}$path';
+  }
 
   @override
   String toString() => statusCode == null
-      ? 'HttpRequestException: $method $url failed (${cause ?? 'transport error'})'
-      : 'HttpRequestException: $method $url returned $statusCode';
+      ? 'HttpRequestException: $method $templatedUrl failed (${cause ?? 'transport error'})'
+      : 'HttpRequestException: $method $templatedUrl returned $statusCode';
 }
 
 /// Shared policy for `package:http` and Dio tracking.
@@ -58,7 +74,11 @@ class HttpErrorTracker {
     final sink = capture;
     if (sink != null) return sink(error, stack);
     if (WasmWatch.isInitialized) {
-      await WasmWatch.captureException(error, stackTrace: stack);
+      await WasmWatch.hub.client.captureException(error,
+          stackTrace: stack,
+          contexts: error is HttpRequestException
+              ? {'request': error.requestContext}
+              : const {});
     }
   }
 
@@ -88,7 +108,11 @@ class HttpErrorTracker {
     ));
     if (statusCode >= 500 && captureServerErrors) {
       await _capture(
-        HttpRequestException(method, url, statusCode: statusCode),
+        HttpRequestException(method, url,
+            statusCode: statusCode,
+            normalizeHttpPath: WasmWatch.isInitialized
+                ? WasmWatch.hub.client.options.normalizeHttpPath
+                : null),
         StackTrace.current,
       );
     }
@@ -119,7 +143,11 @@ class HttpErrorTracker {
     ));
     if (captureTransportErrors) {
       await _capture(
-        HttpRequestException(method, url, cause: error.runtimeType),
+        HttpRequestException(method, url,
+            cause: error.runtimeType,
+            normalizeHttpPath: WasmWatch.isInitialized
+                ? WasmWatch.hub.client.options.normalizeHttpPath
+                : null),
         stackTrace,
       );
     }

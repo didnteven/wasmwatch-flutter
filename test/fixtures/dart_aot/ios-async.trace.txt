@@ -1,0 +1,8 @@
+#0      _fetch (package:spike_app/main.dart:36)
+<asynchronous suspension>
+#1      loadProfile (package:spike_app/main.dart:31)
+<asynchronous suspension>
+#2      runScenarios (package:spike_app/main.dart:75)
+<asynchronous suspension>
+#3      main.<anonymous closure> (package:spike_app/main.dart:91)
+<asynchronous suspension>

@@ -14,6 +14,9 @@ void main() {
     final wire = Envelope(event: event, sdkVersion: '0.1.0').serialize();
     final records = wire.trimRight().split('\n');
     expect(records, hasLength(3));
+    final image = jsonDecode(records[2])['debug_meta']['images'][0];
+    expect(image['type'], 'js');
+    expect(image['code_file'], 'main.dart.js');
     expect(jsonDecode(records[1])['length'], utf8.encode(records[2]).length);
   });
 

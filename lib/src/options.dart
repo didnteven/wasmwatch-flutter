@@ -15,11 +15,13 @@ class WasmWatchOptions {
     this.capturePrintBreadcrumbs = true,
     this.captureNavigationBreadcrumbs = true,
     this.debug = false,
+    this.sendDefaultContext = true,
     this.maxBreadcrumbs = 50,
     this.sampleRate = 1,
     this.maxEventsPerSession = 100,
     this.protectionBypass,
     this.beforeSend,
+    this.normalizeHttpPath,
     this.enablePiiScrubbing = true,
     this.maxRetries = 3,
     this.captureBrowserErrors = true,
@@ -38,6 +40,8 @@ class WasmWatchOptions {
   final bool capturePrintBreadcrumbs;
   final bool captureNavigationBreadcrumbs;
   final bool debug;
+  /// Collect browser/device context without persistent identifiers.
+  final bool sendDefaultContext;
 
   WasmWatchOptions resolved({
     String? dsn,
@@ -65,11 +69,13 @@ class WasmWatchOptions {
       capturePrintBreadcrumbs: capturePrintBreadcrumbs,
       captureNavigationBreadcrumbs: captureNavigationBreadcrumbs,
       debug: debug,
+      sendDefaultContext: sendDefaultContext,
       maxBreadcrumbs: maxBreadcrumbs,
       sampleRate: sampleRate,
       maxEventsPerSession: maxEventsPerSession,
       protectionBypass: protectionBypass,
       beforeSend: beforeSend,
+      normalizeHttpPath: normalizeHttpPath,
       enablePiiScrubbing: enablePiiScrubbing,
       maxRetries: maxRetries,
       captureBrowserErrors: captureBrowserErrors,
@@ -89,6 +95,9 @@ class WasmWatchOptions {
   final bool? protectionBypass;
   bool get bypassProtection => protectionBypass ?? kDebugMode;
   final BeforeSend? beforeSend;
+
+  /// Override the HTTP grouping path template; receives a sanitized URI.
+  final String Function(Uri)? normalizeHttpPath;
   final bool enablePiiScrubbing;
   final int maxRetries;
 

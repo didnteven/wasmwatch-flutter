@@ -1,6 +1,11 @@
 import 'dart:js_interop';
 import 'package:web/web.dart' as web;
 import '../client.dart';
+import 'package:flutter/foundation.dart';
+import '../grouping/normalize.dart';
+import '../wasm/stack_frame_parser.dart';
+import 'wasm_exception_stub.dart'
+    if (dart.library.js_interop) 'wasm_exception.dart';
 
 @JS('Error')
 extension type _JSError(JSObject _) implements JSObject {
@@ -19,6 +24,7 @@ class BrowserErrorHooks {
   JSFunction? _rejectionListener;
   WasmWatchClient? _client;
   bool _handling = false;
+  static bool _warnedMissingHelper = false;
 
   void install(WasmWatchClient client) {
     if (_client != null) return;
@@ -70,6 +76,32 @@ class BrowserErrorHooks {
 
   void _capture(JSAny? reason, String mechanism,
       {String? fallback, String? filename, int? line, int? column}) {
+    final unwrapped = unwrapWasmException(reason);
+    if (unwrapped != null) {
+      final client = _client!;
+      client.captureException(unwrapped.$1,
+          stackTrace: unwrapped.$2,
+          browserCapture: true,
+          mechanism: {
+            'type': mechanism,
+            'handled': false
+          },
+          tags: {
+            'wasmwatch.unwrapped': 'true'
+          }).then<void>((_) {},
+          onError: (Object error, StackTrace stack) =>
+              client.suppressInternalError(error, stack));
+      return;
+    }
+    final opaqueWasm = isWasmException(reason);
+    if (opaqueWasm &&
+        !hasWasmRethrowHelper &&
+        kDebugMode &&
+        !_warnedMissingHelper) {
+      _warnedMissingHelper = true;
+      debugPrint(
+          'WasmWatch: missing __wasmwatchRethrow helper; run the uploader to inject it.');
+    }
     var name = 'Error';
     var message = fallback ?? _safeString(reason);
     String? stack;
@@ -87,6 +119,11 @@ class BrowserErrorHooks {
         message = match.group(2)!;
       }
     }
+    if (opaqueWasm) {
+      name = 'WebAssembly.Exception';
+      message = 'Dart exception escaped to JavaScript (not unwrapped)';
+      stack = wasmExceptionStack(reason);
+    }
     final overflow = name == 'RangeError' &&
         message.contains('Maximum call stack size exceeded');
     // Empty evidence is preferable to a stack pointing at this listener.
@@ -94,20 +131,31 @@ class BrowserErrorHooks {
         ? '    at $filename:${line ?? 0}:${column ?? 0}'
         : '';
     final client = _client!;
-    client.captureException(
+    client
+        .captureException(
       _BrowserException(name, message),
       stackTrace: StackTrace.fromString(stack),
       exceptionTypeOverride: name,
       exceptionValueOverride: message,
+      extra: {
+        if (opaqueWasm &&
+            stack.isNotEmpty &&
+            WasmStackFrameParser.parse(stack)
+                .every((f) => f.type == StackFrameType.raw))
+          'wasm_exception_stack': stack
+      },
       browserCapture: true,
       trimRecursion: overflow,
       mechanism: {'type': mechanism, 'handled': false},
       tags: {
+        if (opaqueWasm) 'wasmwatch.unwrapped': 'false',
         'mechanism.type': mechanism,
         'handled': 'false',
         if (overflow) 'wasm.trap': 'stack_overflow',
       },
       contexts: {
+        if (opaqueWasm)
+          'route': {'path': templatePath(web.window.location.pathname)},
         if (filename != null)
           'browser': {
             'filename': filename,
@@ -115,7 +163,8 @@ class BrowserErrorHooks {
             'colno': column,
           },
       },
-    ).then<void>((_) {}, onError: (Object error, StackTrace stack) {
+    )
+        .then<void>((_) {}, onError: (Object error, StackTrace stack) {
       client.suppressInternalError(error, stack);
     });
   }

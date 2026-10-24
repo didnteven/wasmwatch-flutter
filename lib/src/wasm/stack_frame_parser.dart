@@ -8,7 +8,7 @@ extension WasmOffsetKindWire on WasmOffsetKind {
   };
 }
 
-enum StackFrameType { wasm, js, raw }
+enum StackFrameType { wasm, js, dart, dartAot, raw }
 
 class RawStackFrame {
   const RawStackFrame._({
@@ -22,6 +22,10 @@ class RawStackFrame {
     this.line,
     this.column,
     this.inApp = false,
+    this.absoluteAddress,
+    this.relativeAddress,
+    this.symbol,
+    this.symbolOffset,
   });
 
   factory RawStackFrame.wasm({
@@ -56,8 +60,42 @@ class RawStackFrame {
     inApp: sourceFile.contains('.dart') || sourceFile.contains('main.'),
   );
 
+  factory RawStackFrame.dart({
+    required String rawLine,
+    required String sourceFile,
+    String? functionName,
+    int? line,
+    int? column,
+  }) => RawStackFrame._(
+    type: StackFrameType.dart,
+    rawLine: rawLine,
+    sourceFile: sourceFile,
+    functionName: functionName,
+    line: line,
+    column: column,
+    inApp: !sourceFile.startsWith('dart:') &&
+        !sourceFile.startsWith('package:flutter/') &&
+        !sourceFile.startsWith('package:flutter_test/') &&
+        !sourceFile.startsWith('package:wasmwatch/'),
+  );
+
   factory RawStackFrame.raw({required String rawLine}) =>
       RawStackFrame._(type: StackFrameType.raw, rawLine: rawLine);
+
+  factory RawStackFrame.dartAot({
+    required String rawLine,
+    required String absoluteAddress,
+    String? relativeAddress,
+    String? symbol,
+    String? symbolOffset,
+  }) => RawStackFrame._(
+    type: StackFrameType.dartAot,
+    rawLine: rawLine,
+    absoluteAddress: absoluteAddress,
+    relativeAddress: relativeAddress,
+    symbol: symbol,
+    symbolOffset: symbolOffset,
+  );
 
   final StackFrameType type;
   final String rawLine;
@@ -69,6 +107,10 @@ class RawStackFrame {
   final int? line;
   final int? column;
   final bool inApp;
+  final String? absoluteAddress;
+  final String? relativeAddress;
+  final String? symbol;
+  final String? symbolOffset;
 
   Map<String, Object?> toJson() => switch (type) {
     StackFrameType.wasm => {
@@ -87,6 +129,24 @@ class RawStackFrame {
       if (column != null) 'column': column,
       if (functionName != null) 'function_name': functionName,
       'in_app': inApp,
+      'raw_line': rawLine,
+    },
+    StackFrameType.dart => {
+      'type': 'dart',
+      'source_file': sourceFile,
+      if (line != null) 'line': line,
+      if (column != null) 'column': column,
+      if (functionName != null) 'function_name': functionName,
+      'in_app': inApp,
+      'raw_line': rawLine,
+    },
+    StackFrameType.dartAot => {
+      'type': 'dart_aot',
+      'absolute_address': absoluteAddress,
+      if (relativeAddress != null) 'relative_address': relativeAddress,
+      if (symbol != null) 'symbol': symbol,
+      if (symbolOffset != null) 'symbol_offset': symbolOffset,
+      'in_app': false,
       'raw_line': rawLine,
     },
     StackFrameType.raw => {'type': 'raw', 'raw_line': rawLine, 'in_app': false},
@@ -110,7 +170,7 @@ class WasmStackFrameParser {
   static final RegExp _v8Js = RegExp(
     r'^\s*at\s+(?:(.*?)\s*\()?(.+?):(\d+):(\d+)\)?\s*$',
   );
-  static final RegExp _firefoxJs = RegExp(r'^\s*(.*?)@(.+?):(\d+):(\d+)\s*$');
+  static final RegExp _firefoxJs = RegExp(r'^\s*(.*?)@(.+?):(\d+)(?::(\d+))?\s*$');
 
   static List<RawStackFrame> parse(String stack) {
     final lines = stack.split(RegExp(r'\r?\n'));
@@ -156,7 +216,7 @@ class WasmStackFrameParser {
         functionName: _blankToNull(js.group(1)),
         sourceFile: js.group(2)!,
         line: int.parse(js.group(3)!),
-        column: int.parse(js.group(4)!),
+        column: js.group(4) == null ? null : int.parse(js.group(4)!),
       );
     }
     // Includes WebKit's `wasm-stub`/opaque forms, retained verbatim.

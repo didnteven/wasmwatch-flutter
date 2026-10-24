@@ -7,6 +7,21 @@ import 'package:flutter/foundation.dart';
 import 'package:web/web.dart' as web;
 import 'package:wasmwatch/wasmwatch.dart';
 import 'package:wasmwatch/src/web/browser_error_hooks.dart';
+import 'package:wasmwatch/src/grouping/normalize.dart';
+
+@JS('WebAssembly.Tag')
+extension type NativeTag._(JSObject _) implements JSObject {
+  external factory NativeTag(JSObject descriptor);
+}
+@JS('WebAssembly.Exception')
+extension type NativeWasmException._(JSObject _) implements JSObject {
+  external factory NativeWasmException(JSObject tag, JSArray<JSAny?> values);
+  external set stack(String value);
+}
+@JS('window.__wasmwatchRethrow')
+external set rethrowHelper(JSFunction? value);
+@JS('window.__wasmwatchRethrow')
+external JSFunction? get rethrowHelper;
 
 @JS('Object.create')
 external JSObject nullPrototypeObject(JSAny? prototype);
@@ -95,6 +110,74 @@ void main() {
     hooks.close();
     client.transport.close();
     await WasmWatch.close();
+  });
+
+  test('opaque wasm fallback names, tags and templates route for both hooks',
+      () async {
+    final previous = rethrowHelper;
+    rethrowHelper = null;
+    addTearDown(() => rethrowHelper = previous);
+    final tag = NativeTag({'parameters': <String>[]}.jsify() as JSObject);
+    void checkEvent(String mechanism) {
+      expect(events.single.exceptionType, 'WebAssembly.Exception');
+      expect(events.single.exceptionValue,
+          'Dart exception escaped to JavaScript (not unwrapped)');
+      expect(events.single.tags['wasmwatch.unwrapped'], 'false');
+      expect(events.single.mechanism!['type'], mechanism);
+      expect(events.single.contexts['route'],
+          {'path': templatePath(web.window.location.pathname)});
+    }
+
+    dispatchError('opaque',
+        filename: 'https://app.example/orders/123',
+        error: NativeWasmException(tag, <JSAny?>[].toJS));
+    checkEvent('window.onerror');
+    hooks.close();
+    client.transport.close();
+    events.clear();
+    client = makeClient();
+    hooks.install(client);
+    reject(NativeWasmException(tag, <JSAny?>[].toJS));
+    checkEvent('unhandledrejection');
+  });
+
+  test('opaque wasm preserves unparseable engine stack in extra', () {
+    final previous = rethrowHelper;
+    rethrowHelper = null;
+    addTearDown(() => rethrowHelper = previous);
+    final tag = NativeTag({'parameters': <String>[]}.jsify() as JSObject);
+    final exception = NativeWasmException(tag, <JSAny?>[].toJS)
+      ..stack = 'opaque engine stack evidence';
+    reject(exception);
+    expect(events.single.extra['wasm_exception_stack'],
+        'opaque engine stack evidence');
+  });
+
+  test('opaque wasm parses available engine stack', () {
+    final previous = rethrowHelper;
+    rethrowHelper = null;
+    addTearDown(() => rethrowHelper = previous);
+    final tag = NativeTag({'parameters': <String>[]}.jsify() as JSObject);
+    final exception = NativeWasmException(tag, <JSAny?>[].toJS)
+      ..stack = '    at work (main.dart.wasm:wasm-function[42]:0xff)';
+    reject(exception);
+    expect(events.single.frames.single.functionIndex, 42);
+    expect(events.single.extra.containsKey('wasm_exception_stack'), isFalse);
+  });
+
+  test('foreign wasm tag stays fallback even when helper exists', () {
+    final previous = rethrowHelper;
+    final script = web.HTMLScriptElement()
+      ..text = 'window.__wasmwatchRethrow=function(e){throw e};';
+    web.document.head!.appendChild(script);
+    addTearDown(() {
+      rethrowHelper = previous;
+      script.remove();
+    });
+    final tag = NativeTag({'parameters': <String>[]}.jsify() as JSObject);
+    reject(NativeWasmException(tag, <JSAny?>[].toJS));
+    expect(events.single.exceptionType, 'WebAssembly.Exception');
+    expect(events.single.tags['wasmwatch.unwrapped'], 'false');
   });
 
   test('fresh native errors share the production loop guard', () async {

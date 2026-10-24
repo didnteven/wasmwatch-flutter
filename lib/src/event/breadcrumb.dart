@@ -15,11 +15,19 @@ class Breadcrumb {
   final Map<String, Object?> data;
   final DateTime? timestamp;
 
+  Breadcrumb copyWith({DateTime? timestamp, Map<String, Object?>? data}) =>
+      Breadcrumb(
+          category: category,
+          message: message,
+          level: level,
+          timestamp: timestamp ?? this.timestamp,
+          data: data ?? this.data);
+
   Map<String, Object?> toJson() => {
-    'timestamp': (timestamp ?? DateTime.now()).toUtc().toIso8601String(),
-    'category': category,
-    if (message != null) 'message': message,
-    'level': level.name,
-    if (data.isNotEmpty) 'data': data,
-  };
+        'timestamp': (timestamp ?? DateTime.now()).toUtc().toIso8601String(),
+        'category': category,
+        if (message != null) 'message': message,
+        'level': level.name,
+        if (data.isNotEmpty) 'data': data,
+      };
 }

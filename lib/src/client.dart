@@ -1,8 +1,15 @@
 import 'dart:async';
+import 'package:flutter/foundation.dart';
+import 'version.dart';
+import 'integrations/browser_context.dart';
+import 'integrations/browser_context_source.dart' show browserContextAvailable;
+import 'integrations/device_context.dart';
 import 'dart:math';
 import 'event/envelope.dart';
 import 'event/error_event.dart';
 import 'hub.dart';
+import 'native/aot_identity.dart';
+import 'native/dart_stack_parser.dart';
 import 'options.dart';
 import 'scope.dart';
 import 'transport/http_transport.dart';
@@ -20,19 +27,43 @@ class WasmWatchClient {
       {HttpTransport? transport,
       OfflineBuffer? offlineBuffer,
       RateLimiter? rateLimiter,
+      DeviceContextIntegration? deviceContext,
       DateTime Function()? clock})
       : options = options.resolved(),
         transport = transport ??
             HttpTransport(options.parsedDsn, maxRetries: options.maxRetries),
         offlineBuffer = offlineBuffer,
         rateLimiter = rateLimiter ?? RateLimiter(),
-        _clock = clock ?? DateTime.now;
+        _clock = clock ?? DateTime.now {
+    if (this.options.sendDefaultContext) {
+      if (browserContextAvailable) {
+        _browserContext = BrowserContextIntegration();
+      } else {
+        _deviceContext = deviceContext ?? DeviceContextIntegration();
+      }
+    }
+  }
+
+  BrowserContextIntegration? _browserContext;
+  DeviceContextIntegration? _deviceContext;
+  DartAotHeader? _aotHeader;
+
+  /// Cache snapshot identity and load bases once at SDK initialization.
+  void initializeMobileBuild({StackTrace? stackTrace}) {
+    if (kIsWeb ||
+        (defaultTargetPlatform != TargetPlatform.android &&
+            defaultTargetPlatform != TargetPlatform.iOS)) return;
+    // Android's build_id is the ELF build ID, iOS's the App.framework Mach-O UUID (mobile spike Q2).
+    _aotHeader = DartStackTraceParser.parseAotHeader(
+        (stackTrace ?? StackTrace.current).toString());
+  }
 
   WasmWatchOptions options;
   final HttpTransport transport;
   final OfflineBuffer? offlineBuffer;
   final RateLimiter rateLimiter;
   final DateTime Function() _clock;
+  DateTime Function() get clock => _clock;
   final _loopGuard = ConsecutiveLoopGuard();
   bool _constructing = false;
   int captureAttempts = 0;
@@ -60,6 +91,7 @@ class WasmWatchClient {
     DebugMeta? debugMeta,
     bool captureStackWhenMissing = false,
     Map<String, Object?> contexts = const {},
+    Map<String, Object?> extra = const {},
     Map<String, String> tags = const {},
     Zone? captureZone,
     String? exceptionTypeOverride,
@@ -104,8 +136,13 @@ class WasmWatchClient {
       // it so a receiver never presents captureException as the throw site.
       final usedCaptureTimeStack =
           stackTrace == null && captureStackWhenMissing;
-      var frames = WasmStackFrameParser.parse(
-          (stackTrace ?? StackTrace.current).toString());
+      final stack = (stackTrace ?? StackTrace.current).toString();
+      final aotHeader = kIsWeb
+          ? null
+          : _aotHeader ?? DartStackTraceParser.parseAotHeader(stack);
+      var frames = kIsWeb
+          ? WasmStackFrameParser.parse(stack)
+          : DartStackTraceParser.parse(stack, aotHeader: aotHeader);
       if (trimRecursion) {
         final seen = <String>{};
         frames = frames
@@ -122,6 +159,8 @@ class WasmWatchClient {
           break;
         }
       }
+      final defaults = _browserContext?.capture(activeScope.breadcrumbs) ??
+          _deviceContext?.capture() ?? <String, Object?>{};
       final event = ErrorEvent(
         eventId: _uuidV7(now),
         timestamp: now,
@@ -133,16 +172,20 @@ class WasmWatchClient {
         exceptionValue:
             hint == null ? exceptionValue : '$hint: $exceptionValue',
         frames: frames,
-        debugMeta: debugMeta ?? _defaultDebugMeta(),
+        debugMeta: debugMeta ?? _defaultDebugMeta(aotHeader: aotHeader),
         breadcrumbs:
             activeScope.breadcrumbs.take(options.maxBreadcrumbs).toList(),
-        contexts: {...activeScope.contexts, ...contexts},
+        contexts: {...defaults, ...activeScope.contexts, ...contexts},
         tags: {
+          for (final key in ['browser', 'os', 'device'])
+            if ((contexts[key] ?? activeScope.contexts[key] ?? defaults[key]) case final Map value)
+              if (value[key == 'device' ? 'type' : 'name'] case final String name)
+                key == 'device' ? 'device.type' : key: name,
           ...activeScope.tags,
           ...tags,
           if (usedCaptureTimeStack) 'wasmwatch.stack_trace_origin': 'capture',
         },
-        extra: activeScope.extra,
+        extra: {...activeScope.extra, ...extra},
         user: activeScope.user,
         fingerprint: Fingerprinter.fingerprint(
             exceptionType: exceptionType, culpritSymbol: symbol),
@@ -155,7 +198,8 @@ class WasmWatchClient {
               }).run(() => options.beforeSend!(event));
         if (processed == null) return null;
         final envelope =
-            Envelope(event: processed, sdkVersion: '0.1.0').serialize();
+            Envelope(event: processed, sdkVersion: wasmwatchSdkVersion)
+                .serialize();
         await flushOffline();
         final sent = await transport.send(envelope);
         if (!sent && transport.shouldBuffer(envelope) && offlineBuffer != null)
@@ -201,7 +245,28 @@ class WasmWatchClient {
     return completion.future;
   }
 
-  DebugMeta _defaultDebugMeta() {
+  DebugMeta _defaultDebugMeta({DartAotHeader? aotHeader}) {
+    if (!kIsWeb &&
+        (defaultTargetPlatform == TargetPlatform.iOS ||
+            defaultTargetPlatform == TargetPlatform.android)) {
+      final ios = defaultTargetPlatform == TargetPlatform.iOS;
+      final header = aotHeader ?? _aotHeader;
+      final buildId = header?.buildId;
+      return DebugMeta(images: [
+        DebugImage(
+            type: 'elf',
+            debugId: buildId == null
+                ? '00000000-0000-7000-8000-000000000000'
+                : dartAotDebugId(buildId),
+            buildId: buildId,
+            codeFile: ios ? 'App.framework/App' : 'libapp.so',
+            os: header?.os ?? (ios ? 'ios' : 'android'),
+            arch: header?.arch,
+            isolateDsoBase: header?.isolateDsoBase,
+            vmDsoBase: header?.vmDsoBase,
+            release: options.release)
+      ]);
+    }
     final id = extractWasmDebugId() ?? '00000000-0000-7000-8000-000000000000';
     return DebugMeta(images: [
       DebugImage(
@@ -212,7 +277,14 @@ class WasmWatchClient {
     ]);
   }
 
-  String _platform() => isWasmRuntime ? 'dart-wasm' : 'dart';
+  String _platform() {
+    if (kIsWeb) return isWasmRuntime ? 'dart-wasm' : 'dart';
+    return switch (defaultTargetPlatform) {
+      TargetPlatform.iOS => 'dart-ios',
+      TargetPlatform.android => 'dart-android',
+      _ => 'dart',
+    };
+  }
 
   static String _uuidV7(DateTime timestamp) {
     final random = Random.secure();

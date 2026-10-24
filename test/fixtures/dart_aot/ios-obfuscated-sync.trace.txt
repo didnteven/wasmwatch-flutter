@@ -1,0 +1,22 @@
+*** *** *** *** *** *** *** *** *** *** *** *** *** *** *** ***
+pid: 780, tid: 8337303680, name io.flutter.1.ui
+os: ios arch: arm64 comp: no sim: no
+build_id: '05eb04b8711c3d27bb9cd9e1cd3247de'
+isolate_dso_base: 1080c4000, vm_dso_base: 1080c4000
+isolate_instructions: 1080d2800, vm_instructions: 1080c8000
+    #00 abs 000000010821e3df _kDartIsolateSnapshotInstructions+0x14bbdf
+    #01 abs 000000010821e38f _kDartIsolateSnapshotInstructions+0x14bb8f
+    #02 abs 000000010821e35b _kDartIsolateSnapshotInstructions+0x14bb5b
+    #03 abs 00000001082424ff _kDartIsolateSnapshotInstructions+0x16fcff
+    #04 abs 00000001082422c3 _kDartIsolateSnapshotInstructions+0x16fac3
+    #05 abs 0000000108241e4b _kDartIsolateSnapshotInstructions+0x16f64b
+    #06 abs 0000000108223e2f _kDartIsolateSnapshotInstructions+0x15162f
+    #07 abs 0000000108223d1f _kDartIsolateSnapshotInstructions+0x15151f
+    #08 abs 0000000108143dc3 _kDartIsolateSnapshotInstructions+0x715c3
+    #09 abs 0000000108143acb _kDartIsolateSnapshotInstructions+0x712cb
+    #10 abs 00000001080e86e7 _kDartIsolateSnapshotInstructions+0x15ee7
+    #11 abs 0000000108222e6f _kDartIsolateSnapshotInstructions+0x15066f
+    #12 abs 00000001080e7017 _kDartIsolateSnapshotInstructions+0x14817
+    #13 abs 00000001080e6f9f _kDartIsolateSnapshotInstructions+0x1479f
+    #14 abs 0000000108243bcb _kDartIsolateSnapshotInstructions+0x1713cb
+    #15 abs 00000001080e6d73 _kDartIsolateSnapshotInstructions+0x14573

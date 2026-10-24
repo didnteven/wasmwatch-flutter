@@ -73,6 +73,9 @@ void enrichSources(Map<String, dynamic> map, Directory root) {
       }
       if (source.startsWith('file:')) return File.fromUri(Uri.parse(source));
       if (source.startsWith('/')) return File(source);
+      final relative = source.replaceFirst(RegExp(r'^(?:\.\.?/)+'), '');
+      final resolved = relative.startsWith('lib/') ? root.uri.resolve(relative) : Directory('${root.path}/build/web').uri.resolve(source);
+      if (resolved.path.startsWith(Directory('${root.path}/lib').uri.path)) return File.fromUri(resolved);
     } catch (_) {/* Unsupported URI remains without context. */}
     return null;
   }

@@ -1,0 +1,23 @@
+*** *** *** *** *** *** *** *** *** *** *** *** *** *** *** ***
+pid: 9162, tid: 503786631264, name 1.ui
+os: android arch: arm64 comp: yes sim: no
+build_id: '7a3ef930ac16d20b3fa36f07088fe804'
+isolate_dso_base: 71dd7a0000, vm_dso_base: 71dd7a0000
+isolate_instructions: 71dd846a40, vm_instructions: 71dd830000
+    #00 abs 00000071dd9a0497 virt 0000000000200497 _kDartIsolateSnapshotInstructions+0x159a57
+    #01 abs 00000071dd9a0447 virt 0000000000200447 _kDartIsolateSnapshotInstructions+0x159a07
+    #02 abs 00000071dd9a040f virt 000000000020040f _kDartIsolateSnapshotInstructions+0x1599cf
+    #03 abs 00000071dd9c561b virt 000000000022561b _kDartIsolateSnapshotInstructions+0x17ebdb
+    #04 abs 00000071dd9c53df virt 00000000002253df _kDartIsolateSnapshotInstructions+0x17e99f
+    #05 abs 00000071dd9c5257 virt 0000000000225257 _kDartIsolateSnapshotInstructions+0x17e817
+    #06 abs 00000071dd9a8f4f virt 0000000000208f4f _kDartIsolateSnapshotInstructions+0x16250f
+    #07 abs 00000071dd9a8e3f virt 0000000000208e3f _kDartIsolateSnapshotInstructions+0x1623ff
+    #08 abs 00000071dd8b4c5f virt 0000000000114c5f _kDartIsolateSnapshotInstructions+0x6e21f
+    #09 abs 00000071dd8b4927 virt 0000000000114927 _kDartIsolateSnapshotInstructions+0x6dee7
+    #10 abs 00000071dd85d1e3 virt 00000000000bd1e3 _kDartIsolateSnapshotInstructions+0x167a3
+    #11 abs 00000071dd9a4fbb virt 0000000000204fbb _kDartIsolateSnapshotInstructions+0x15e57b
+    #12 abs 00000071dd85ba7b virt 00000000000bba7b _kDartIsolateSnapshotInstructions+0x1503b
+    #13 abs 00000071dd85ba03 virt 00000000000bba03 _kDartIsolateSnapshotInstructions+0x14fc3
+    #14 abs 00000071dd9c6d93 virt 0000000000226d93 _kDartIsolateSnapshotInstructions+0x180353
+    #15 abs 00000071dd85b7cb virt 00000000000bb7cb _kDartIsolateSnapshotInstructions+0x14d8b
+

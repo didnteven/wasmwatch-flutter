@@ -2,6 +2,24 @@ import 'package:test/test.dart';
 import 'package:wasmwatch/wasmwatch.dart';
 
 void main() {
+  test('browser JS formats retain one based coordinates', () {
+    for (final line in [
+      'at fn (https://example.test/main.dart.js:123:45)',
+      'at https://example.test/main.dart.js:123:45',
+      'fn@https://example.test/main.dart.js:123:45',
+      '@https://example.test/main.dart.js:123:45',
+      'global code@https://example.test/main.dart.js:123:45',
+    ]) {
+      final frame = WasmStackFrameParser.parseLine(line);
+      expect(frame.type, StackFrameType.js, reason: line);
+      expect(frame.sourceFile, 'https://example.test/main.dart.js');
+      expect(frame.line, 123);
+      expect(frame.column, 45);
+    }
+    final safari = WasmStackFrameParser.parseLine('fn@https://example.test/main.dart.js:123');
+    expect(safari.line, 123);
+    expect(safari.column, isNull);
+  });
   test('retains every non-header line and parses V8 wasm offsets', () {
     final frames = WasmStackFrameParser.parse('Error: boom\n    at wasm-function[312]:0x1a4\n    at wasm-stub\n');
     expect(frames, hasLength(2));

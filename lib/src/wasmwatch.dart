@@ -79,7 +79,10 @@ class WasmWatch {
             _hub?.client.captureException(error, stackTrace: stack),
         onPrint: resolved.capturePrintBreadcrumbs
             ? (line) {
-                if (_hub != null)
+                if (_hub != null &&
+                    Zone.current[
+                            FlutterErrorIntegration.suppressPrintZoneKey] !=
+                        true)
                   addBreadcrumb(Breadcrumb(category: 'console', message: line));
               }
             : null,
@@ -104,6 +107,7 @@ class WasmWatch {
     }
     final activeClient =
         client ?? WasmWatchClient(options, offlineBuffer: offlineBuffer);
+    activeClient.initializeMobileBuild();
     if (identical(_hub?.client, activeClient)) {
       _uninstall();
     } else {
@@ -161,6 +165,28 @@ class WasmWatch {
       );
     });
   }
+
+  /// Capture a synchronous callback failure before it escapes into JavaScript.
+  static R guardCallback<R>(R Function() body) {
+    try {
+      return body();
+    } catch (error, stack) {
+      final client = _hub?.client;
+      if (client != null) {
+        unawaited(client.captureException(error, stackTrace: stack, mechanism: {
+          'type': 'js_callback',
+          'handled': false
+        }).then<void>((_) {},
+            onError: (Object e, StackTrace s) =>
+                client.suppressInternalError(e, s)));
+      }
+      rethrow;
+    }
+  }
+
+  /// Return a one-argument callback suitable for `.toJS` or plugin APIs.
+  static R Function(A) guardCallback1<A, R>(R Function(A) body) =>
+      (argument) => guardCallback(() => body(argument));
 
   static Future<String?> captureMessage(
     String message, {

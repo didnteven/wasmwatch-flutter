@@ -10,6 +10,27 @@ import 'package:wasmwatch/src/cli/upload_sourcemaps.dart';
 const wasm = [0, 97, 115, 109, 1, 0, 0, 0];
 
 void main() {
+  test('injects helper once before bootstrap, including an existing Debug ID',
+      () {
+    final dir = Directory.systemTemp.createTempSync('rethrow-test');
+    addTearDown(() => dir.deleteSync(recursive: true));
+    final file = File('${dir.path}/index.html')
+      ..writeAsStringSync(
+          '<head><script src="flutter_bootstrap.js"></script></head>');
+    injectGlobals(file, 'id', 'release');
+    final first = file.readAsStringSync();
+    expect('__wasmwatchRethrow'.allMatches(first), hasLength(1));
+    expect(first.indexOf('__wasmwatchRethrow'),
+        lessThan(first.indexOf('flutter_bootstrap.js')));
+    injectGlobals(file, 'id', 'release');
+    expect(file.readAsStringSync(), first);
+    file.writeAsStringSync(first.replaceAll(
+        '<script>window.__wasmwatchRethrow=function(e){throw e};</script>\n',
+        ''));
+    injectGlobals(file, 'id', 'release');
+    expect(file.readAsStringSync(), first);
+  });
+
   test('artifact identity matches Node, including numeric keys and numbers',
       () {
     final map = jsonDecode(
@@ -482,8 +503,9 @@ void main() {
         '1'
       ], environment: {});
       expect(m.types, ['wasm_source_map', 'js_source_map']);
-      expect(utf8.decode(m.bodies[1]), jsMap,
-          reason: 'relative sources cannot be mapped and stay as built');
+      final js = jsonDecode(utf8.decode(m.bodies[1])) as Map;
+      expect(js['sourcesContent'][0], contains('void main()'));
+      expect(js['mappings'], (jsonDecode(jsMap) as Map)['mappings']);
       expect(File('${build.path}/main.dart.js.map').readAsStringSync(), jsMap);
       expect(output, contains('js artifact artifact'));
     });
@@ -504,8 +526,8 @@ void main() {
         '1'
       ], environment: {});
       final uploaded = jsonDecode(utf8.decode(m.bodies[1])) as Map;
-      expect(uploaded['sources'], ['package:demo/main.dart']);
-      expect(uploaded.containsKey('sourcesContent'), isFalse);
+      expect((uploaded['sources'] as List).first, 'package:demo/main.dart');
+      expect(uploaded['sourcesContent'][0], contains('void main()'));
       expect(
           File('${build.path}/main.dart.js.map').readAsStringSync(), original);
     });
