@@ -44,7 +44,9 @@ class ZoneIntegration {
         }
       },
       (Object error, StackTrace stack) {
-        client.captureException(error, stackTrace: stack);
+        client.captureException(error,
+            stackTrace: stack,
+            mechanism: const {'type': 'zone', 'handled': false});
         if (!completer.isCompleted) completer.completeError(error, stack);
       },
     );

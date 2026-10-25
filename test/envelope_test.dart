@@ -33,4 +33,36 @@ void main() {
     expect(json, contains(zeroId));
     expect(json, isNot(contains('4111')));
   });
+
+  test('captureException defaults to handled and preserves explicit mechanisms on the wire', () async {
+    final events = <ErrorEvent>[];
+    final client = WasmWatchClient(WasmWatchOptions(
+      dsn: 'http://key@localhost/api/v1/1',
+      beforeSend: (event) { events.add(event); return null; },
+    ));
+    await client.captureException(StateError('caught'));
+    await client.captureException(StateError('uncaught'),
+        mechanism: const {'type': 'flutter_error', 'handled': false});
+    final mechanisms = events.map((event) {
+      final records = Envelope(event: event, sdkVersion: 'test').serialize().trimRight().split('\n');
+      return jsonDecode(records[2])['exception']['values'][0]['mechanism'];
+    }).toList();
+    expect(mechanisms, [
+      {'type': 'generic', 'handled': true},
+      {'type': 'flutter_error', 'handled': false},
+    ]);
+  });
+
+  test('guarded zone errors carry an unhandled mechanism', () async {
+    final events = <ErrorEvent>[];
+    final client = WasmWatchClient(WasmWatchOptions(
+      dsn: 'http://key@localhost/api/v1/1',
+      beforeSend: (event) { events.add(event); return null; },
+    ));
+    await expectLater(ZoneIntegration.runZonedGuarded<void>(client, () async {
+      throw StateError('zone error');
+    }), throwsStateError);
+    expect(events.single.mechanism, {'type': 'zone', 'handled': false});
+  });
+
 }

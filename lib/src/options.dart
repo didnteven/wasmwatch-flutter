@@ -16,6 +16,7 @@ class WasmWatchOptions {
     this.captureNavigationBreadcrumbs = true,
     this.debug = false,
     this.sendDefaultContext = true,
+    bool? trackSessions,
     this.maxBreadcrumbs = 50,
     this.sampleRate = 1,
     this.maxEventsPerSession = 100,
@@ -27,7 +28,8 @@ class WasmWatchOptions {
     this.captureBrowserErrors = true,
     this.captureUnhandledRejections = true,
     this.ignoreCrossOriginScriptErrors = true,
-  })  : assert(maxBreadcrumbs >= 0 && maxBreadcrumbs <= 50),
+  })  : _trackSessions = trackSessions,
+        assert(maxBreadcrumbs >= 0 && maxBreadcrumbs <= 50),
         assert(sampleRate >= 0 && sampleRate <= 1),
         assert(maxRetries >= 0),
         assert(maxEventsPerSession >= 0);
@@ -42,6 +44,13 @@ class WasmWatchOptions {
   final bool debug;
   /// Collect browser/device context without persistent identifiers.
   final bool sendDefaultContext;
+
+  final bool? _trackSessions;
+  /// Track release-health sessions by default on iOS and Android only.
+  bool get trackSessions => _trackSessions ??
+      (!kIsWeb &&
+          (defaultTargetPlatform == TargetPlatform.iOS ||
+              defaultTargetPlatform == TargetPlatform.android));
 
   WasmWatchOptions resolved({
     String? dsn,
@@ -70,6 +79,7 @@ class WasmWatchOptions {
       captureNavigationBreadcrumbs: captureNavigationBreadcrumbs,
       debug: debug,
       sendDefaultContext: sendDefaultContext,
+      trackSessions: _trackSessions,
       maxBreadcrumbs: maxBreadcrumbs,
       sampleRate: sampleRate,
       maxEventsPerSession: maxEventsPerSession,

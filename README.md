@@ -1,6 +1,6 @@
 # WasmWatch
 
-Error tracking for Flutter Web and WebAssembly applications.
+Error tracking for Flutter apps: web (WebAssembly and JavaScript), iOS and Android.
 
 ## Install
 
@@ -12,7 +12,7 @@ dependencies:
   wasmwatch:
     git:
       url: https://github.com/didnteven/wasmwatch-flutter.git
-      ref: v0.5.0
+      ref: v0.6.0
 ```
 
 Then run `flutter pub get`.
@@ -48,6 +48,63 @@ dart run wasmwatch:upload_sourcemaps build/web
 
 Uploading source maps lets WasmWatch show readable Dart stack traces for
 errors from your WebAssembly build.
+
+## iOS and Android
+
+The same `WasmWatch.init` captures Dart errors from iOS and Android release
+builds, with device and OS context. Uncaught errors (`FlutterError.onError`,
+`PlatformDispatcher.onError`, zones, isolates) are labeled **Unhandled**. Each
+event is saved before it is sent, so one in flight when the app is killed goes
+out at the next launch. Readable release builds need no upload.
+
+For obfuscated `--split-debug-info` builds, upload each build's symbols and
+obfuscation map with an `artifact:write` upload token (never the DSN's public
+key). Give each platform its own paths:
+
+```sh
+export WASMWATCH_DSN='YOUR_DSN'
+export WASMWATCH_UPLOAD_TOKEN='YOUR_UPLOAD_TOKEN'
+
+# Android
+flutter build apk --release --obfuscate --split-debug-info=build/symbols/android \
+  --extra-gen-snapshot-options=--save-obfuscation-map=build/android-obfuscation.map.json
+dart run wasmwatch:upload_symbols --symbols-dir build/symbols/android \
+  --obfuscation-map build/android-obfuscation.map.json
+
+# iOS: upload App.framework.dSYM (not Runner.app.dSYM) and the .symbols directory
+flutter build ios --release --obfuscate --split-debug-info=build/symbols/ios \
+  --extra-gen-snapshot-options=--save-obfuscation-map=build/ios-obfuscation.map.json
+dart run wasmwatch:upload_symbols \
+  --dsym build/ios/Release-iphoneos/App.framework.dSYM \
+  --symbols-dir build/symbols/ios --obfuscation-map build/ios-obfuscation.map.json
+```
+
+The release defaults to your pubspec `name@version`; pass `--release` to match
+a custom `release:`. A later upload also repairs earlier events.
+
+### Isolates
+
+Errors on the main isolate are captured automatically. For background
+isolates, spawn them through WasmWatch to capture their uncaught errors with
+the original type:
+
+```dart
+await WasmWatch.spawn(heavyWork, input);
+// Or, for isolates you spawn yourself:
+await Isolate.spawn(heavyWork, input, onError: WasmWatch.isolateErrorPort());
+```
+
+### Release health
+
+On iOS and Android the SDK tracks sessions (`trackSessions`, on by default for
+mobile), and the dashboard's **Releases** page shows crash-free users and
+sessions. A session that ends with the app dying in the foreground counts as a
+crash; one the OS kills in the background ends normally. Users are random
+anonymous install IDs. Set `trackSessions: false` in `WasmWatchOptions` to opt
+out.
+
+Native crashes (Swift, Kotlin, C/C++), ANRs and app hangs are not captured yet;
+run Crashlytics or Sentry alongside WasmWatch for those.
 
 ## Migrating an existing Flutter web app
 
@@ -108,7 +165,8 @@ within one second. Each duplicate refreshes that interval: a continuous loop
 emits once until it pauses. `A → B → A` remains capturable. Browser/Dart cross-hook
 dedupe operates independently.
 
-A session is one initialized client. `maxEventsPerSession` defaults to 100 capture
+For loop protection, a session is one initialized client (unrelated to release
+health sessions). `maxEventsPerSession` defaults to 100 capture
 attempts after dedupe and before callbacks or delivery; dropped callbacks,
 throttled attempts and transport failures still consume that session budget.
 Existing 60/minute limiting also applies. Scoped guards contain SDK recursion
@@ -130,6 +188,3 @@ buffered as a failure. Admission/SDK protection removes observations before the
 server counts them: counts describe admitted observations, not all original
 application throws. Stable application user IDs are needed for identified-user
 breadth; anonymous users remain unknown.
-
-SDK source in this checkout is under `packages/dart-sdk`. This change does not
-publish or push the separate public `didnteven/wasmwatch-flutter` repository.

@@ -1,3 +1,11 @@
+## 0.6.0
+
+- Uncaught Dart errors (`FlutterError.onError`, `PlatformDispatcher.onError`, zones, isolates) are sent as unhandled (`mechanism.handled: false`); `captureException` events are handled. The dashboard labels and filters unhandled issues.
+- Main-isolate error listener on iOS and Android; `WasmWatch.spawn` captures uncaught errors from spawned isolates with their original type; `WasmWatch.isolateErrorPort()` for isolates you spawn yourself.
+- Every event is saved before it is sent and removed once accepted, so events in flight when the app is killed are sent at the next launch.
+- Release health: sessions are tracked on iOS and Android (`trackSessions`, default on for mobile); the dashboard's Releases page shows crash-free users and sessions. Until native capture lands, a session that dies in the foreground is abnormal and counts as a crash; one the OS kills in the background ends normally. Verified on an iPhone 15 Pro Max.
+- `upload_symbols --dsym … --symbols-dir build/symbols/ios` also uploads the iOS `.symbols` file, so frames in functions starting with `l` symbolicate (dart-lang/sdk#64716).
+
 ## 0.5.0
 
 - Flutter iOS and Android: capture Dart errors from release builds, with the `dart-ios`/`dart-android` platform and device and OS context. Readable builds need no upload.

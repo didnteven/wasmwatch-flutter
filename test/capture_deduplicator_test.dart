@@ -1,4 +1,5 @@
 import 'package:wasmwatch/src/utils/consecutive_loop_guard.dart';
+import 'dart:isolate';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:wasmwatch/src/web/capture_deduplicator.dart';
 import 'package:wasmwatch/src/web/browser_error_hooks_stub.dart';
@@ -6,6 +7,53 @@ import 'package:wasmwatch/wasmwatch.dart';
 
 void main() {
   final now = DateTime.utc(2026);
+  test('matches serialized main-isolate errors with dispatcher captures only',
+      () {
+    final buffer = CaptureDeduplicator();
+    final error = RangeError.index(2, [0], 'index');
+    final remote = RemoteError(error.toString(), 'throw stack');
+    expect(
+        buffer.record(error, 'normalized message', 'throw stack', now,
+            platformDispatcher: true),
+        false);
+    expect(
+        buffer.record(remote, remote.toString(), 'throw stack',
+            now.add(const Duration(milliseconds: 1900)),
+            isolate: true),
+        true);
+    expect(
+        buffer.record(remote, remote.toString(), 'other stack', now,
+            isolate: true),
+        false);
+    expect(
+        buffer.record(RemoteError(error.toString(), 'throw stack'),
+            error.toString(), 'throw stack', now),
+        false);
+    expect(
+        buffer.record(
+            RemoteError(error.toString(), 'throw stack'),
+            error.toString(),
+            'throw stack',
+            now.add(const Duration(seconds: 2)),
+            isolate: true),
+        false);
+  });
+  test('separate isolate errors and missing throw stacks remain independent',
+      () {
+    final buffer = CaptureDeduplicator();
+    for (var i = 0; i < 2; i++) {
+      expect(
+          buffer.record(RemoteError('boom', 'stack'), 'boom', 'stack', now,
+              isolate: true),
+          false);
+    }
+    expect(buffer.record(Object(), 'boom', null, now, platformDispatcher: true),
+        false);
+    expect(
+        buffer.record(RemoteError('boom', ''), 'boom', null, now,
+            isolate: true),
+        false);
+  });
   test('guardCallback captures before rethrow and browser echo is suppressed',
       () async {
     final events = <ErrorEvent>[];

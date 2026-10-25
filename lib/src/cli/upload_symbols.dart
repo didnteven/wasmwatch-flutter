@@ -6,8 +6,8 @@ import 'upload_client.dart';
 
 const uploadSymbolsHelp = '''Upload Flutter mobile debug symbols with pure Dart.
 Usage: dart run wasmwatch:upload_symbols --symbols-dir build/symbols [options]
-       dart run wasmwatch:upload_symbols --dsym App.framework.dSYM [options]
-  --symbols-dir DIR          Android: the --split-debug-info directory
+       dart run wasmwatch:upload_symbols --dsym App.framework.dSYM --symbols-dir build/symbols/ios [options]
+  --symbols-dir DIR          The --split-debug-info directory (iOS: with --dsym)
   --dsym DIR                 iOS: the build's App.framework.dSYM (not Runner.app.dSYM)
   --obfuscation-map FILE     Upload the map once per build debug ID
   --dsn DSN                 SDK DSN (or WASMWATCH_DSN)
@@ -187,22 +187,31 @@ Future<String> runUploadSymbols(List<String> args,
   final dsym = values['dsym'];
   final directory = values['symbols-dir'];
   // One platform per run: Android and iOS builds have different obfuscation maps.
-  if ((dsym == null) == (directory == null)) throw const FormatException('provide either --symbols-dir (Android) or --dsym (iOS)');
+  if (dsym == null && directory == null) throw const FormatException('provide either --symbols-dir (Android) or --dsym (iOS)');
   final files = <File>[];
   final skipped = <String>[];
+  final iosFiles = <File>[];
   if (directory != null) {
     final dir = Directory(directory);
     if (!dir.existsSync()) throw FormatException('missing ${dir.path}');
     for (final file in dir.listSync().whereType<File>().where((f) => f.path.endsWith('.symbols'))) {
       // iOS .symbols have no build ID; the iOS identity and addresses are the dSYM's.
-      if (RegExp(r'^app\.ios-.*\.symbols$').hasMatch(file.uri.pathSegments.last)) {
-        skipped.add('skipped ${file.path}: iOS uses --dsym App.framework.dSYM');
+      if (RegExp(r'^app\.ios-.+\.symbols$').hasMatch(file.uri.pathSegments.last)) {
+        if (dsym != null) {
+          iosFiles.add(file);
+        } else {
+          skipped.add('skipped ${file.path}: iOS uses --dsym App.framework.dSYM');
+        }
       } else {
         files.add(file);
       }
     }
     files.sort((a, b) => a.path.compareTo(b.path));
-    if (files.isEmpty) {
+    if (dsym != null && files.isNotEmpty) {
+      throw const FormatException('--dsym with --symbols-dir requires only app.ios-*.symbols; use a separate directory for Android');
+    }
+    iosFiles.sort((a, b) => a.path.compareTo(b.path));
+    if (files.isEmpty && iosFiles.isEmpty) {
       throw FormatException(skipped.isEmpty ? 'no .symbols files found'
           : 'only iOS .symbols found; pass --dsym build/ios/Release-iphoneos/App.framework.dSYM');
     }
@@ -246,6 +255,14 @@ Future<String> runUploadSymbols(List<String> args,
     lines.add('${file.path}\ndebug id $id\nbuild id $buildId');
     final artifact = dryRun ? 'dry-run (no network upload)' : await uploadArtifact(target!, 'dart_symbols', id, release, bytes, timeout, interval);
     lines.add('dart_symbols artifact $artifact');
+    if (file == dsymFile) {
+      for (final elf in iosFiles) {
+        final bytes = _artifactBytes(elf);
+        lines.add('${elf.path}\ndebug id $id');
+        final artifact = dryRun ? 'dry-run (no network upload)' : await uploadArtifact(target!, 'dart_symbols_elf', id, release, bytes, timeout, interval);
+        lines.add('dart_symbols_elf artifact $artifact');
+      }
+    }
     if (map != null && mapped.add(id)) {
       final artifact = dryRun ? 'dry-run (no network upload)' : await uploadArtifact(target!, 'dart_obfuscation_map', id, release, map, timeout, interval);
       lines.add('dart_obfuscation_map artifact $artifact');

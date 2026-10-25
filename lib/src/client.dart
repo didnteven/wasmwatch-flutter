@@ -12,6 +12,7 @@ import 'native/aot_identity.dart';
 import 'native/dart_stack_parser.dart';
 import 'options.dart';
 import 'scope.dart';
+import 'session.dart';
 import 'transport/http_transport.dart';
 import 'transport/offline_buffer.dart';
 import 'transport/rate_limiter.dart';
@@ -70,6 +71,8 @@ class WasmWatchClient {
   int consecutiveDrops = 0;
   int sessionCapDrops = 0;
   final _deduplicator = CaptureDeduplicator();
+  final _liveEnvelopeIds = <String>{};
+  Future<void>? _offlineFlush;
   static final internalCaptureZoneKey = Object();
   static bool get isInternalCapture =>
       Zone.current[internalCaptureZoneKey] == true;
@@ -82,6 +85,12 @@ class WasmWatchClient {
   }
 
   Hub? hub;
+  SessionTracker? sessionTracker;
+
+  /// Persist session-only updates with the same acknowledgement rules as events.
+  Future<void> sendSession(Map<String, Object?> session) => _runInternal(() =>
+      _deliverEnvelope(Envelope(session: session, sdkVersion: wasmwatchSdkVersion)
+          .serialize(), waitForSend: false));
 
   Future<String?> captureException(
     Object error, {
@@ -98,6 +107,7 @@ class WasmWatchClient {
     String? exceptionValueOverride,
     Map<String, Object?>? mechanism,
     bool browserCapture = false,
+    bool isolateCapture = false,
     bool trimRecursion = false,
   }) async {
     if (isInternalCapture || _constructing) return null;
@@ -121,7 +131,10 @@ class WasmWatchClient {
       }
       if (_deduplicator.record(
           error, exceptionValue, stackTrace?.toString(), now,
-          browser: browserCapture)) return null;
+          browser: browserCapture,
+          isolate: isolateCapture,
+          platformDispatcher: mechanism?['type'] == 'platform_dispatcher'))
+        return null;
       if (!options.bypassProtection) {
         if (captureAttempts >= options.maxEventsPerSession) {
           sessionCapDrops++;
@@ -161,6 +174,15 @@ class WasmWatchClient {
       }
       final defaults = _browserContext?.capture(activeScope.breadcrumbs) ??
           _deviceContext?.capture() ?? <String, Object?>{};
+      final sessionContext = sessionTracker?.context;
+      final eventContexts = {...defaults, ...activeScope.contexts, ...contexts};
+      if (sessionContext != null) {
+        eventContexts['session'] = sessionContext;
+        eventContexts['device'] = {
+          if (eventContexts['device'] case final Map device) ...device,
+          'session': sessionContext,
+        };
+      }
       final event = ErrorEvent(
         eventId: _uuidV7(now),
         timestamp: now,
@@ -168,14 +190,14 @@ class WasmWatchClient {
         release: options.release,
         environment: options.environment,
         exceptionType: exceptionType,
-        mechanism: mechanism,
+        mechanism: mechanism ?? const {'type': 'generic', 'handled': true},
         exceptionValue:
             hint == null ? exceptionValue : '$hint: $exceptionValue',
         frames: frames,
         debugMeta: debugMeta ?? _defaultDebugMeta(aotHeader: aotHeader),
         breadcrumbs:
             activeScope.breadcrumbs.take(options.maxBreadcrumbs).toList(),
-        contexts: {...defaults, ...activeScope.contexts, ...contexts},
+        contexts: eventContexts,
         tags: {
           for (final key in ['browser', 'os', 'device'])
             if ((contexts[key] ?? activeScope.contexts[key] ?? defaults[key]) case final Map value)
@@ -197,13 +219,10 @@ class WasmWatchClient {
                 internalCaptureZoneKey: true
               }).run(() => options.beforeSend!(event));
         if (processed == null) return null;
-        final envelope =
-            Envelope(event: processed, sdkVersion: wasmwatchSdkVersion)
-                .serialize();
-        await flushOffline();
-        final sent = await transport.send(envelope);
-        if (!sent && transport.shouldBuffer(envelope) && offlineBuffer != null)
-          await offlineBuffer!.store(envelope);
+        final session = await sessionTracker?.recordError();
+        final envelope = Envelope(event: processed, session: session,
+                sdkVersion: wasmwatchSdkVersion).serialize();
+        await _deliverEnvelope(envelope);
         return processed.eventId;
       });
     } finally {
@@ -211,17 +230,52 @@ class WasmWatchClient {
     }
   }
 
-  Future<void> flushOffline() => _runInternal(() async {
+  Future<void> _deliverEnvelope(String envelope, {bool waitForSend = true}) async {
+    String? id;
+    try {
+      id = await offlineBuffer?.store(envelope);
+    } catch (_) {
+      // Persistence is best-effort: a storage failure must not block delivery.
+    }
+    if (id != null) _liveEnvelopeIds.add(id);
+    final delivery = _runInternal(() async {
+      try {
+        await flushOffline();
+        await _sendEnvelope(envelope, id: id);
+      } finally {
+        if (id != null) _liveEnvelopeIds.remove(id);
+      }
+    });
+    if (waitForSend) {
+      await delivery;
+    } else {
+      unawaited(delivery.catchError((Object error, StackTrace stack) {
+        suppressInternalError(error, stack);
+      }));
+    }
+  }
+
+  Future<bool> _sendEnvelope(String envelope,
+      {String? id, bool replay = false}) async {
+    // A live send may have acknowledged an entry since the replay snapshot.
+    if (replay && !await offlineBuffer!.contains(id!)) return true;
+    final sent = await transport.send(envelope);
+    final completed = sent || !transport.shouldBuffer(envelope);
+    if (completed && id != null) await offlineBuffer!.remove(id);
+    return completed;
+  }
+
+  Future<void> flushOffline() => _offlineFlush ??= _runInternal(() async {
         final buffer = offlineBuffer;
         if (buffer == null) return;
-        final claimed = await buffer.drain();
-        for (var index = 0; index < claimed.length; index++) {
-          if (!await transport.send(claimed[index])) {
-            if (!transport.shouldBuffer(claimed[index])) continue;
-            await buffer.requeue(claimed.sublist(index));
+        for (final entry in await buffer.pending()) {
+          // The stored copy belongs to its live send until that send completes.
+          if (_liveEnvelopeIds.contains(entry.id)) continue;
+          if (!await _sendEnvelope(entry.envelope, id: entry.id, replay: true))
             return;
-          }
         }
+      }).whenComplete(() {
+        _offlineFlush = null;
       });
 
   Future<T> _runInternal<T>(Future<T> Function() operation) {
@@ -276,6 +330,8 @@ class WasmWatchClient {
           release: options.release)
     ]);
   }
+
+  String get platform => _platform();
 
   String _platform() {
     if (kIsWeb) return isWasmRuntime ? 'dart-wasm' : 'dart';

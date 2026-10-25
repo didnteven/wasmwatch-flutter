@@ -118,6 +118,7 @@ class FlutterErrorIntegration {
       );
       client.captureException(
         captured,
+        mechanism: const {'type': 'flutter_error', 'handled': false},
         stackTrace: details.stack,
         captureStackWhenMissing: details.stack == null,
         contexts: {
@@ -156,6 +157,7 @@ class FlutterErrorIntegration {
             : const <String, Object?>{};
         client.captureException(
           error,
+          mechanism: const {'type': 'platform_dispatcher', 'handled': false},
           stackTrace: stackTrace,
           contexts: {
             if (eventMetadata['context'] is Map)

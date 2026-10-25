@@ -1,6 +1,9 @@
 import 'dart:async';
+import 'dart:isolate';
 import 'package:flutter/widgets.dart';
 import 'integrations/flutter_error.dart';
+import 'integrations/isolate_error_stub.dart'
+    if (dart.library.io) 'integrations/isolate_error.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'client.dart';
 import 'event/breadcrumb.dart';
@@ -9,6 +12,7 @@ import 'hub.dart';
 import 'integrations/zone_integration.dart';
 import 'options.dart';
 import 'scope.dart';
+import 'session.dart';
 import 'transport/offline_buffer.dart';
 import 'wasm/loader_check.dart';
 import 'web/browser_error_hooks_stub.dart'
@@ -19,6 +23,7 @@ class WasmWatch {
   static Hub? _hub;
   static BrowserErrorHooks? _browserHooks;
   static FlutterErrorIntegration? _flutterIntegration;
+  static IsolateErrorIntegration? _isolateIntegration;
   static _LifecycleBreadcrumbs? _lifecycle;
   static FlutterErrorIntegration? get flutterErrorIntegration =>
       _flutterIntegration;
@@ -76,7 +81,9 @@ class WasmWatch {
       await ZoneIntegration.runGuarded(
         start,
         onError: (error, stack) =>
-            _hub?.client.captureException(error, stackTrace: stack),
+            _hub?.client.captureException(error,
+                stackTrace: stack,
+                mechanism: const {'type': 'zone', 'handled': false}),
         onPrint: resolved.capturePrintBreadcrumbs
             ? (line) {
                 if (_hub != null &&
@@ -95,11 +102,13 @@ class WasmWatch {
     WasmWatchClient? client,
   ) async {
     OfflineBuffer? offlineBuffer;
-    if (client == null) {
+    SharedPreferences? preferences;
+    if (client == null || options.trackSessions) {
       try {
-        offlineBuffer = OfflineBuffer(
-          SharedPreferencesStorage(await SharedPreferences.getInstance()),
-        );
+        preferences = await SharedPreferences.getInstance();
+        if (client == null) {
+          offlineBuffer = OfflineBuffer(SharedPreferencesStorage(preferences));
+        }
       } catch (_) {
         // Persistent storage is optional. Unsupported plugins (including on
         // WebAssembly) must not prevent the host application from starting.
@@ -110,17 +119,32 @@ class WasmWatch {
     activeClient.initializeMobileBuild();
     if (identical(_hub?.client, activeClient)) {
       _uninstall();
+      await activeClient.sessionTracker?.close();
+      activeClient.sessionTracker = null;
     } else {
       await close();
     }
     checkWasmLoader();
     _hub = Hub(activeClient);
     activeClient.hub = _hub;
+    _isolateIntegration = IsolateErrorIntegration()..install(activeClient);
     _browserHooks = BrowserErrorHooks()..install(activeClient);
     if (options.autoInstallFlutterErrorHandlers) {
       _flutterIntegration = FlutterErrorIntegration()..install(activeClient);
     }
-    if (options.captureLifecycleBreadcrumbs) {
+    if (options.trackSessions) {
+      final tracker = SessionTracker(
+        release: options.release?.isNotEmpty == true ? options.release! : 'unknown',
+        environment: options.environment!,
+        platform: activeClient.platform,
+        preferences: preferences,
+        clock: activeClient.clock,
+        onUpdate: activeClient.sendSession,
+      );
+      activeClient.sessionTracker = tracker;
+      await tracker.start();
+    }
+    if (options.captureLifecycleBreadcrumbs || options.trackSessions) {
       _lifecycle = _LifecycleBreadcrumbs();
       WidgetsBinding.instance.addObserver(_lifecycle!);
     }
@@ -130,6 +154,8 @@ class WasmWatch {
   /// Restore handlers, remove observers/listeners, and close the transport.
   static Future<void> close() async {
     _uninstall();
+    await _hub?.client.sessionTracker?.close();
+    _hub?.client.sessionTracker = null;
     _hub?.client.transport.close();
     _hub = null;
   }
@@ -139,6 +165,8 @@ class WasmWatch {
     _browserHooks = null;
     _flutterIntegration?.close();
     _flutterIntegration = null;
+    _isolateIntegration?.close();
+    _isolateIntegration = null;
     if (_lifecycle != null) WidgetsBinding.instance.removeObserver(_lifecycle!);
     _lifecycle = null;
   }
@@ -164,6 +192,27 @@ class WasmWatch {
         scope: scope,
       );
     });
+  }
+
+  /// Spawn an isolate whose uncaught errors retain their original type name.
+  /// Requires initialization; isolate spawning is unavailable on the web.
+  static Future<Isolate> spawn<T>(void Function(T) entry, T message) {
+    final integration = _isolateIntegration;
+    if (integration == null) {
+      throw StateError('WasmWatch has not been initialized');
+    }
+    return integration.spawn(entry, message);
+  }
+
+  /// Forward uncaught errors from manually spawned isolates as RemoteError.
+  /// Pass this port to Isolate.spawn's onError argument to avoid startup races.
+  /// The port remains valid until close() or the next init().
+  static SendPort isolateErrorPort() {
+    final integration = _isolateIntegration;
+    if (integration == null) {
+      throw StateError('WasmWatch has not been initialized');
+    }
+    return integration.errorPort;
   }
 
   /// Capture a synchronous callback failure before it escapes into JavaScript.
@@ -216,8 +265,18 @@ class _MessageException implements Exception {
 class _LifecycleBreadcrumbs extends WidgetsBindingObserver {
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    WasmWatch.addBreadcrumb(
-      Breadcrumb(category: 'app.lifecycle', message: state.name),
-    );
+    final client = WasmWatch._hub?.client;
+    if (client == null) return;
+    final tracker = client.sessionTracker;
+    if (tracker != null) {
+      unawaited(tracker.didChangeAppLifecycleState(state).catchError(
+          (Object error, StackTrace stack) =>
+              client.suppressInternalError(error, stack)));
+    }
+    if (client.options.captureLifecycleBreadcrumbs) {
+      WasmWatch.addBreadcrumb(
+        Breadcrumb(category: 'app.lifecycle', message: state.name),
+      );
+    }
   }
 }

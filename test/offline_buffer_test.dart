@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:test/test.dart';
 import 'package:wasmwatch/wasmwatch.dart';
 
@@ -32,7 +33,7 @@ void main() {
     var now = DateTime.utc(2026);
     final storage = MemoryStorage();
     final buffer = OfflineBuffer(storage,
-        maximumBytes: 100,
+        maximumBytes: 150,
         maximumAge: const Duration(hours: 1),
         clock: () => now);
     await buffer.store('short');
@@ -43,5 +44,62 @@ void main() {
     final restarted = OfflineBuffer(storage,
         maximumAge: const Duration(hours: 1), clock: () => now);
     expect(await restarted.drain(), isEmpty);
+  });
+  test('removes exact IDs without losing identical or later envelopes',
+      () async {
+    final storage = MemoryStorage();
+    final buffer = OfflineBuffer(storage);
+    final first = await buffer.store('same');
+    final second = await buffer.store('same');
+    expect(second, isNot(first));
+    final pending = await buffer.pending();
+    expect(pending.map((entry) => entry.id), [first, second]);
+    await buffer.store('later');
+    await buffer.remove(first);
+    expect((await buffer.pending()).map((entry) => entry.envelope),
+        ['same', 'later']);
+    await buffer.remove(first);
+    expect((await buffer.pending()).first.id, second);
+  });
+  test('reads old and new entries without rewriting old entries', () async {
+    final storage = MemoryStorage();
+    final buffer = OfflineBuffer(storage);
+    final old = jsonEncode({
+      'at': DateTime.now().toUtc().toIso8601String(),
+      'envelope': 'old',
+    });
+    storage.values[buffer.key] = [old, old];
+    final id = await buffer.store('new');
+    final restarted = OfflineBuffer(storage);
+    final pending = await restarted.pending();
+    expect(pending.map((entry) => entry.envelope), ['old', 'old', 'new']);
+    expect(storage.values[buffer.key]!.first, old);
+    await restarted.remove(pending.first.id);
+    expect((await restarted.pending()).map((entry) => entry.envelope),
+        ['old', 'new']);
+    await restarted.remove(id);
+    expect((await restarted.pending()).single.envelope, 'old');
+  });
+
+  test('session updates coalesce by sid and give way to events when full',
+      () async {
+    String session(String sid, String status) =>
+        '{}\n{"type":"session","content_type":"application/json","length":1}\n'
+        '{"sid":"$sid","status":"$status"}\n';
+    expect(OfflineBuffer.sessionOnlyId(session('a', 'ok')), 'a');
+    expect(OfflineBuffer.sessionOnlyId('{}\n{"type":"event"}\n{}\n'), isNull);
+    final buffer = OfflineBuffer(MemoryStorage(), maximum: 3);
+    await buffer.store(session('a', 'ok'));
+    await buffer.store(session('a', 'exited'));
+    expect((await buffer.pending()).map((entry) => entry.envelope),
+        [session('a', 'exited')]);
+    await buffer.store('event-1');
+    await buffer.store(session('b', 'ok'));
+    await buffer.store('event-2');
+    expect((await buffer.pending()).map((entry) => entry.envelope),
+        ['event-1', session('b', 'ok'), 'event-2']);
+    await buffer.store('event-3');
+    expect((await buffer.pending()).map((entry) => entry.envelope),
+        ['event-1', 'event-2', 'event-3']);
   });
 }
