@@ -1,0 +1,27 @@
+{
+  "v": 1,
+  "id": "ios-bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+  "kind": "ios_exit_metrics",
+  "release": "old-ios-build",
+  "environment": "production",
+  "install_id": "00000000-0000-4000-8000-000000000001",
+  "payload_begin": 1792800000000,
+  "payload_end": 1792886400000,
+  "diagnostic": {
+    "foregroundExitData": {
+      "cumulativeNormalAppExitCount": 12,
+      "cumulativeMemoryResourceLimitExitCount": "2",
+      "cumulativeBadAccessExitCount": 1,
+      "cumulativeAbnormalExitCount": 0,
+      "cumulativeIllegalInstructionExitCount": 0,
+      "cumulativeAppWatchdogExitCount": 3
+    },
+    "backgroundExitData": {
+      "cumulativeNormalAppExitCount": "10",
+      "cumulativeMemoryPressureExitCount": 4,
+      "cumulativeCPUResourceLimitExitCount": "5",
+      "cumulativeBackgroundTaskAssertionTimeoutExitCount": 1,
+      "cumulativeSuspendedWithLockedFileExitCount": 2
+    }
+  }
+}

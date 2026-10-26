@@ -1,15 +1,25 @@
+import 'dart:collection';
 import 'event/breadcrumb.dart';
 import 'event/user.dart';
 
 class Scope {
-  Scope({this.user, DateTime Function()? clock})
-      : clock = clock ?? DateTime.now;
+  Scope({WasmWatchUser? user, DateTime Function()? clock})
+      : _user = user,
+        clock = clock ?? DateTime.now;
+  void Function()? onChanged;
+  void _changed() => onChanged?.call();
   final DateTime Function() clock;
-  WasmWatchUser? user;
-  final Map<String, String> tags = {};
+  WasmWatchUser? _user;
+  WasmWatchUser? get user => _user;
+  set user(WasmWatchUser? value) {
+    _user = value;
+    _changed();
+  }
+
+  late final Map<String, String> tags = _ChangingMap(_changed);
   final Map<String, Object?> extra = {};
   final Map<String, Object?> contexts = {};
-  final List<Breadcrumb> breadcrumbs = [];
+  late final List<Breadcrumb> breadcrumbs = _ChangingList(_changed);
 
   Scope clone() {
     final result = Scope(user: user, clock: clock);
@@ -61,5 +71,73 @@ class Scope {
           : 0;
       breadcrumbs.removeAt(index < 0 ? 0 : index);
     }
+  }
+}
+
+// Preserve the mutable collection API, including direct mutations by callers.
+class _ChangingMap<K, V> extends MapBase<K, V> {
+  _ChangingMap(this.changed);
+  final void Function() changed;
+  final _values = <K, V>{};
+  @override
+  V? operator [](Object? key) => _values[key];
+  @override
+  void operator []=(K key, V value) {
+    _values[key] = value;
+    changed();
+  }
+
+  @override
+  Iterable<K> get keys => _values.keys;
+  @override
+  void clear() {
+    _values.clear();
+    changed();
+  }
+
+  @override
+  V? remove(Object? key) {
+    final old = _values.remove(key);
+    changed();
+    return old;
+  }
+}
+
+class _ChangingList<T> extends ListBase<T> {
+  _ChangingList(this.changed);
+  final void Function() changed;
+  final _values = <T>[];
+  @override
+  int get length => _values.length;
+  @override
+  set length(int value) {
+    _values.length = value;
+    changed();
+  }
+
+  @override
+  T operator [](int index) => _values[index];
+  @override
+  void operator []=(int index, T value) {
+    _values[index] = value;
+    changed();
+  }
+
+  @override
+  void add(T value) {
+    _values.add(value);
+    changed();
+  }
+
+  @override
+  void addAll(Iterable<T> values) {
+    _values.addAll(values);
+    changed();
+  }
+
+  @override
+  void insert(int index, T value) {
+    _values.insert(index, value);
+    changed();
   }
 }

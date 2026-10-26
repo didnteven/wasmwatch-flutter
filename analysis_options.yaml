@@ -1,6 +1,7 @@
 analyzer:
   exclude:
     - test/contracts/**
+    - wasmwatch_native/**
 
 linter:
   rules:

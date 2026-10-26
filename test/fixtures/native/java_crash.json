@@ -1,0 +1,94 @@
+{
+  "v": 1,
+  "id": "java-fixture",
+  "kind": "java_crash",
+  "timestamp_ms": 1792837800000,
+  "pid": 12,
+  "release": "2.1.0+57",
+  "environment": "production",
+  "install_id": "a8676f67-d139-45c8-9ca6-325572125f71",
+  "scope": {
+    "session_id": "c8676f67-d139-45c8-9ca6-325572125f71",
+    "android_mapping_id": "a8676f67-d139-45c8-9ca6-325572125f71",
+    "breadcrumbs": [
+      {
+        "timestamp": "2026-10-24T10:29:00.000Z",
+        "category": "ui",
+        "message": "tap",
+        "level": "info"
+      }
+    ],
+    "user": {
+      "id": "old-user",
+      "email_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    },
+    "tags": {
+      "build": "old"
+    }
+  },
+  "exception": {
+    "class": "java.lang.IllegalStateException",
+    "message": "spike kotlin crash from main thread",
+    "frames": [
+      {
+        "module": "D.c",
+        "function": "run",
+        "filename": "SourceFile",
+        "lineno": 32
+      },
+      {
+        "module": "android.os.Handler",
+        "function": "handleCallback",
+        "filename": "Handler.java",
+        "lineno": 1070
+      },
+      {
+        "module": "android.os.Handler",
+        "function": "dispatchMessage",
+        "filename": "Handler.java",
+        "lineno": 125
+      },
+      {
+        "module": "android.os.Looper",
+        "function": "dispatchMessage",
+        "filename": "Looper.java",
+        "lineno": 333
+      },
+      {
+        "module": "android.os.Looper",
+        "function": "loopOnce",
+        "filename": "Looper.java",
+        "lineno": 263
+      },
+      {
+        "module": "android.os.Looper",
+        "function": "loop",
+        "filename": "Looper.java",
+        "lineno": 367
+      },
+      {
+        "module": "android.app.ActivityThread",
+        "function": "main",
+        "filename": "ActivityThread.java",
+        "lineno": 9282
+      },
+      {
+        "module": "java.lang.reflect.Method",
+        "function": "invoke",
+        "filename": "Native Method"
+      },
+      {
+        "module": "com.android.internal.os.RuntimeInit$MethodAndArgsCaller",
+        "function": "run",
+        "filename": "RuntimeInit.java",
+        "lineno": 566
+      },
+      {
+        "module": "com.android.internal.os.ZygoteInit",
+        "function": "main",
+        "filename": "ZygoteInit.java",
+        "lineno": 929
+      }
+    ]
+  }
+}

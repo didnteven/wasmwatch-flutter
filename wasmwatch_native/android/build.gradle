@@ -1,0 +1,28 @@
+group = 'dev.wasmwatch.wasmwatch_native'
+version = '0.1.0'
+
+buildscript {
+    ext.kotlin_version = '2.2.20'
+    repositories { google(); mavenCentral() }
+    dependencies {
+        classpath 'com.android.tools.build:gradle:8.11.1'
+        classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version"
+    }
+}
+
+apply plugin: 'com.android.library'
+apply plugin: 'kotlin-android'
+
+android {
+    namespace = 'dev.wasmwatch.wasmwatch_native'
+    compileSdk = flutter.compileSdkVersion
+    defaultConfig { minSdk = flutter.minSdkVersion }
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
+    }
+    kotlinOptions { jvmTarget = '17' }
+    testOptions { unitTests.all { maxHeapSize = '1g' } }
+}
+
+dependencies { testImplementation 'junit:junit:4.13.2' }

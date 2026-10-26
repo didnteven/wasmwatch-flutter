@@ -1,0 +1,15 @@
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+pubspec.lock
+build/
+.gradle/
+local.properties
+*.iml
+.idea/
+example/android/app/debug/
+example/android/app/profile/
+example/android/app/release/
+.kotlin/
+.cxx/
+coverage/

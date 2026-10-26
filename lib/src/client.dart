@@ -22,6 +22,8 @@ import 'utils/fingerprinter.dart';
 import 'wasm/debug_id.dart';
 import 'wasm/stack_frame_parser.dart';
 import 'web/capture_deduplicator.dart';
+import 'native/native_reports.dart';
+import 'utils/uuid.dart';
 
 class WasmWatchClient {
   WasmWatchClient(WasmWatchOptions options,
@@ -88,9 +90,63 @@ class WasmWatchClient {
   SessionTracker? sessionTracker;
 
   /// Persist session-only updates with the same acknowledgement rules as events.
-  Future<void> sendSession(Map<String, Object?> session) => _runInternal(() =>
-      _deliverEnvelope(Envelope(session: session, sdkVersion: wasmwatchSdkVersion)
-          .serialize(), waitForSend: false));
+  Future<void> sendSession(Map<String, Object?> session) async {
+    await _runInternal(() => _deliverEnvelope(
+        Envelope(session: session, sdkVersion: wasmwatchSdkVersion).serialize(),
+        waitForSend: false));
+  }
+
+  /// Exit reports remain in the native store until accepted or permanently rejected.
+  /// Offline persistence alone does not acknowledge the native report.
+  Future<bool> sendAppExits(Map<String, Object?> report) =>
+      _runInternal(() async {
+        final exits = appExitsFromNativeReport(report);
+        if (exits == null) return true;
+        return _deliverEnvelope(
+            Envelope(appExits: exits, sdkVersion: wasmwatchSdkVersion)
+                .serialize());
+      });
+
+  /// Sends an earlier process's event without changing this process's session.
+  /// True means intentionally dropped, durably stored, or permanently delivered.
+  Future<bool> capturePrebuiltEvent(ErrorEvent event) => _runInternal(() async {
+        final now = _clock();
+        if (!options.bypassProtection) {
+          if (captureAttempts >= options.maxEventsPerSession) {
+            sessionCapDrops++;
+            return true;
+          }
+          captureAttempts++;
+          if (!rateLimiter.allow(now) ||
+              Random().nextDouble() > options.sampleRate) return true;
+        }
+        final processed = options.beforeSend == null
+            ? event
+            : await options.beforeSend!(event);
+        if (processed == null) return true;
+        return _deliverEnvelope(
+            Envelope(event: processed, sdkVersion: wasmwatchSdkVersion)
+                .serialize(),
+            waitForSend: false,
+            acknowledgeStored: true);
+      });
+
+  /// Best-effort conversion using current device/AOT evidence only.
+  ErrorEvent? nativeReportEvent(Map<String, Object?> report) {
+    Map<String, Object?>? device;
+    try {
+      final captured = _deviceContext?.capture()['device'];
+      if (captured is Map) device = Map<String, Object?>.from(captured);
+    } catch (error, stack) {
+      suppressInternalError(error, stack);
+    }
+    final image =
+        _defaultDebugMeta().images.where((image) => image.type == 'elf');
+    return eventFromNativeReport(report,
+        now: _clock(),
+        deviceContext: device,
+        dartImage: image.isEmpty ? null : image.first.toJson());
+  }
 
   Future<String?> captureException(
     Object error, {
@@ -173,7 +229,8 @@ class WasmWatchClient {
         }
       }
       final defaults = _browserContext?.capture(activeScope.breadcrumbs) ??
-          _deviceContext?.capture() ?? <String, Object?>{};
+          _deviceContext?.capture() ??
+          <String, Object?>{};
       final sessionContext = sessionTracker?.context;
       final eventContexts = {...defaults, ...activeScope.contexts, ...contexts};
       if (sessionContext != null) {
@@ -184,7 +241,7 @@ class WasmWatchClient {
         };
       }
       final event = ErrorEvent(
-        eventId: _uuidV7(now),
+        eventId: uuidV7(now),
         timestamp: now,
         platform: _platform(),
         release: options.release,
@@ -200,8 +257,10 @@ class WasmWatchClient {
         contexts: eventContexts,
         tags: {
           for (final key in ['browser', 'os', 'device'])
-            if ((contexts[key] ?? activeScope.contexts[key] ?? defaults[key]) case final Map value)
-              if (value[key == 'device' ? 'type' : 'name'] case final String name)
+            if ((contexts[key] ?? activeScope.contexts[key] ?? defaults[key])
+                case final Map value)
+              if (value[key == 'device' ? 'type' : 'name']
+                  case final String name)
                 key == 'device' ? 'device.type' : key: name,
           ...activeScope.tags,
           ...tags,
@@ -220,8 +279,11 @@ class WasmWatchClient {
               }).run(() => options.beforeSend!(event));
         if (processed == null) return null;
         final session = await sessionTracker?.recordError();
-        final envelope = Envelope(event: processed, session: session,
-                sdkVersion: wasmwatchSdkVersion).serialize();
+        final envelope = Envelope(
+                event: processed,
+                session: session,
+                sdkVersion: wasmwatchSdkVersion)
+            .serialize();
         await _deliverEnvelope(envelope);
         return processed.eventId;
       });
@@ -230,28 +292,40 @@ class WasmWatchClient {
     }
   }
 
-  Future<void> _deliverEnvelope(String envelope, {bool waitForSend = true}) async {
+  Future<bool> _deliverEnvelope(String envelope,
+      {bool waitForSend = true, bool acknowledgeStored = false}) async {
     String? id;
     try {
       id = await offlineBuffer?.store(envelope);
+      if (id != null) {
+        // Reserve before the membership await so concurrent replay cannot claim it.
+        _liveEnvelopeIds.add(id);
+        if (!await offlineBuffer!.contains(id)) {
+          _liveEnvelopeIds.remove(id);
+          id = null;
+        }
+      }
     } catch (_) {
+      if (id != null) _liveEnvelopeIds.remove(id);
+      id = null;
       // Persistence is best-effort: a storage failure must not block delivery.
     }
-    if (id != null) _liveEnvelopeIds.add(id);
     final delivery = _runInternal(() async {
       try {
         await flushOffline();
-        await _sendEnvelope(envelope, id: id);
+        return await _sendEnvelope(envelope, id: id);
       } finally {
         if (id != null) _liveEnvelopeIds.remove(id);
       }
     });
-    if (waitForSend) {
-      await delivery;
+    if (waitForSend || (acknowledgeStored && id == null)) {
+      return await delivery;
     } else {
-      unawaited(delivery.catchError((Object error, StackTrace stack) {
+      unawaited(delivery.then<void>((_) {},
+          onError: (Object error, StackTrace stack) {
         suppressInternalError(error, stack);
       }));
+      return id != null;
     }
   }
 
@@ -340,21 +414,5 @@ class WasmWatchClient {
       TargetPlatform.android => 'dart-android',
       _ => 'dart',
     };
-  }
-
-  static String _uuidV7(DateTime timestamp) {
-    final random = Random.secure();
-    final milliseconds = timestamp.millisecondsSinceEpoch;
-    final bytes = List<int>.generate(16, (_) => random.nextInt(256));
-    for (var index = 5; index >= 0; index--) {
-      bytes[index] = milliseconds >> ((5 - index) * 8) & 0xff;
-    }
-    bytes[6] = (bytes[6] & 0x0f) | 0x70;
-    bytes[8] = (bytes[8] & 0x3f) | 0x80;
-    String hex(int start, int end) => bytes
-        .sublist(start, end)
-        .map((byte) => byte.toRadixString(16).padLeft(2, '0'))
-        .join();
-    return '${hex(0, 4)}-${hex(4, 6)}-${hex(6, 8)}-${hex(8, 10)}-${hex(10, 16)}';
   }
 }

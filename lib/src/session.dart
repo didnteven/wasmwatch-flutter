@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:math';
 import 'package:flutter/widgets.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'native/install_id.dart';
 
 /// D7 sessions. State is saved before updates enter the offline envelope buffer.
 /// Sending an update must only wait for persistence, never for the network.
@@ -14,13 +15,17 @@ class SessionTracker {
     required this.onUpdate,
     SharedPreferences? preferences,
     DateTime Function()? clock,
+    this.onBegin,
   })  : _preferences = preferences,
         _clock = clock ?? DateTime.now;
 
   static const sessionKey = 'wasmwatch_session';
+  static const previousSessionsKey = 'wasmwatch_previous_sessions';
+  static const nativeWaitTimeout = Duration(seconds: 30);
   static const installIdKey = 'wasmwatch_install_id';
   static const backgroundKey = 'wasmwatch_session_background';
   static const backgroundTimeout = Duration(seconds: 30);
+  final void Function()? onBegin;
   final String release;
   final String environment;
   final String platform;
@@ -31,6 +36,8 @@ class SessionTracker {
   String? _did;
   DateTime? _backgroundAt;
   Timer? _timer;
+  Timer? _nativeTimer;
+  List<Map<String, Object?>> _previousSessions = [];
   bool _closed = false;
   Future<void> _pending = Future<void>.value();
 
@@ -40,48 +47,168 @@ class SessionTracker {
 
   Future<void> get pending => _pending;
 
-  Future<void> start() async {
+  Future<void> start(
+      {List<Map<String, Object?>> nativeReports = const [],
+      bool deferPrevious = false,
+      String? installId}) async {
     String? previous;
     String? background;
     try {
-      _did = _preferences?.getString(installIdKey);
       previous = _preferences?.getString(sessionKey);
       background = _preferences?.getString(backgroundKey);
-    } catch (_) {/* Storage is optional on unsupported platforms. */}
-    if (_did == null) {
-      _did = _uuid();
-      try {
-        await _preferences?.setString(installIdKey, _did!);
-      } catch (_) {/* Keep the random install ID in memory if storage fails. */}
-    }
-    if (previous != null) {
-      try {
+      final stored = _preferences?.getString(previousSessionsKey);
+      if (stored != null) {
+        _previousSessions = (jsonDecode(stored) as List)
+            .map((entry) => Map<String, Object?>.from(entry as Map))
+            .toList();
+      }
+      if (previous != null) {
         final session = Map<String, Object?>.from(jsonDecode(previous) as Map);
-        if (session['status'] == 'ok') {
-          // The OS suspends a backgrounded app (stopping the end timer) and may then kill it
-          // without notice: that ends the session normally at the time it was backgrounded.
-          // Only a session that died in the foreground is abnormal.
-          final backgroundAt =
-              background == null ? null : DateTime.tryParse(background);
-          _advance(session, backgroundAt);
-          session['init'] = false;
-          session['status'] = backgroundAt == null
-              ? 'abnormal'
-              : (session['errors'] as int) > 0
-                  ? 'errored'
-                  : 'exited';
-          await _save(session, emit: true);
+        if (session['status'] == 'ok' &&
+            !_previousSessions.any((entry) =>
+                (entry['session'] as Map)['sid'] == session['sid'])) {
+          _previousSessions.add({'session': session, 'background': background});
         }
-      } catch (_) {/* Ignore corrupt state, rather than blocking startup. */}
+      }
+    } catch (_) {/* Ignore corrupt state, rather than blocking startup. */}
+    _did = installId ?? await getInstallId(_preferences);
+    // Persist before replacing the active session: a kill during native recovery
+    // must leave both the deferred session and this launch's session recoverable.
+    await _storePrevious();
+    if (deferPrevious) {
+      _nativeTimer = Timer(nativeWaitTimeout, () {
+        unawaited(completeNativeReports());
+      });
+    } else {
+      await completeNativeReports(nativeReports);
     }
     if (background != null) await _saveBackground(null);
     await _begin();
   }
 
+  /// iOS can wait for a matching late diagnostic until the original 30 s timer.
+  /// Reports after fallback still become events, without revising that session.
+  Future<void> completeNativeReports(
+      [List<Map<String, Object?>> nativeReports = const [],
+      bool waitForMore = false]) {
+    if (!waitForMore) {
+      _nativeTimer?.cancel();
+      _nativeTimer = null;
+    }
+    if (_closed || _previousSessions.isEmpty) return _pending;
+    return _enqueue(() async {
+      // Select inside the queue so a callback racing the fallback (or another
+      // callback) cannot remove another deferred session from persistent state.
+      final previous = _previousSessions.where((entry) {
+        if (!waitForMore) return true;
+        final sid = (entry['session'] as Map)['sid'];
+        return nativeReports.any((report) =>
+            report['kind'] == 'ios_crash' &&
+            report['scope'] is Map &&
+            (report['scope'] as Map)['session_id'] == sid);
+      }).toList();
+      final remaining = List<Map<String, Object?>>.from(_previousSessions);
+      for (final entry in previous) {
+        try {
+          final session = Map<String, Object?>.from(entry['session'] as Map);
+          if (session['status'] == 'ok') {
+            // The OS suspends a backgrounded app (stopping the end timer) and may then kill it
+            // without notice: that ends the session normally at the time it was backgrounded.
+            // Only a session that died in the foreground is abnormal.
+            final backgroundAt = entry['background'] == null
+                ? null
+                : DateTime.tryParse(entry['background'] as String);
+            _advance(session, backgroundAt);
+            session['init'] = false;
+            session['status'] = backgroundAt == null
+                ? 'abnormal'
+                : (session['errors'] as int) > 0
+                    ? 'errored'
+                    : 'exited';
+            final started = DateTime.parse(session['started'] as String);
+            DateTime? reportTime;
+            String? reportStatus;
+            for (final report in nativeReports) {
+              final scope = report['scope'];
+              if (scope is! Map || scope['session_id'] != session['sid'])
+                continue;
+              final kind = report['kind'];
+              final exit = report['exit'];
+              final crash = kind == 'ios_crash' ||
+                  kind == 'native_crash' ||
+                  (kind == 'java_crash' && exit is Map);
+              if (!crash && kind != 'anr' && kind != 'app_exit') continue;
+              final status = crash ? 'crashed' : 'abnormal';
+              if (reportStatus == 'crashed' && !crash) continue;
+              final milliseconds = exit is Map
+                  ? exit['timestamp_ms'] ?? report['timestamp_ms']
+                  : report['timestamp_ms'];
+              DateTime? at;
+              if (milliseconds is int &&
+                  milliseconds >= 0 &&
+                  milliseconds <= 0xffffffffffff) {
+                at = DateTime.fromMillisecondsSinceEpoch(milliseconds,
+                    isUtc: true);
+                if (!at.isAfter(started)) at = null;
+              }
+              if (reportStatus != status) reportTime = null;
+              reportStatus = status;
+              if (at != null && (reportTime == null || at.isAfter(reportTime)))
+                reportTime = at;
+            }
+            if (reportStatus != null) {
+              session['status'] = reportStatus;
+              if (reportStatus == 'crashed')
+                session['errors'] = max(session['errors'] as int, 1);
+              if (reportTime != null)
+                session['timestamp'] = reportTime.toIso8601String();
+            }
+          }
+          // onUpdate persists the envelope before returning. Remove recovery
+          // state only after it has accepted this update, never overwrite the
+          // current session's storage with an update for an older session.
+          entry['session'] = session;
+          await _storePrevious(remaining);
+          if (_current == null) {
+            // Recovery without a bridge runs before _begin replaces sessionKey.
+            // Mark that active slot terminal too, so a kill cannot re-add it.
+            try {
+              final stored = _preferences?.getString(sessionKey);
+              if (stored != null &&
+                  (jsonDecode(stored) as Map)['sid'] == session['sid']) {
+                await _preferences?.setString(sessionKey, jsonEncode(session));
+              }
+            } catch (_) {/* Storage is optional on unsupported platforms. */}
+          }
+          await onUpdate(session);
+          remaining.remove(entry);
+          _previousSessions.remove(entry);
+          await _storePrevious(remaining);
+        } catch (_) {/* Retain failed updates for the next launch. */}
+      }
+      if (_previousSessions.isEmpty) {
+        _nativeTimer?.cancel();
+        _nativeTimer = null;
+      }
+    });
+  }
+
+  Future<void> _storePrevious([List<Map<String, Object?>>? sessions]) async {
+    try {
+      final remaining = sessions ?? _previousSessions;
+      if (remaining.isEmpty) {
+        await _preferences?.remove(previousSessionsKey);
+      } else {
+        await _preferences?.setString(
+            previousSessionsKey, jsonEncode(remaining));
+      }
+    } catch (_) {/* Storage is optional on unsupported platforms. */}
+  }
+
   Future<void> _begin() {
     final now = _clock().toUtc().toIso8601String();
     _current = {
-      'sid': _uuid(),
+      'sid': sessionUuid(),
       'did': _did,
       'init': true,
       'started': now,
@@ -91,6 +218,7 @@ class SessionTracker {
       'attrs': {'release': release, 'environment': environment},
       'platform': platform,
     };
+    onBegin?.call();
     return _save(_current!, emit: true);
   }
 
@@ -186,17 +314,10 @@ class SessionTracker {
   Future<void> close() async {
     if (_closed) return;
     _closed = true;
+    _nativeTimer?.cancel();
+    _nativeTimer = null;
     _timer?.cancel();
     _timer = null;
     await _end();
-  }
-
-  static String _uuid() {
-    final random = Random.secure();
-    final bytes = List.generate(16, (_) => random.nextInt(256));
-    bytes[6] = (bytes[6] & 15) | 64;
-    bytes[8] = (bytes[8] & 63) | 128;
-    final hex = bytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
-    return '${hex.substring(0, 8)}-${hex.substring(8, 12)}-${hex.substring(12, 16)}-${hex.substring(16, 20)}-${hex.substring(20)}';
   }
 }

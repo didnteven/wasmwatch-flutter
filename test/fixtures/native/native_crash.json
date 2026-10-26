@@ -1,0 +1,595 @@
+{
+  "v": 1,
+  "id": "native-fixture",
+  "kind": "native_crash",
+  "timestamp_ms": 1792837800000,
+  "pid": 12,
+  "release": "2.1.0+57",
+  "environment": "production",
+  "install_id": "a8676f67-d139-45c8-9ca6-325572125f71",
+  "scope": {
+    "session_id": "c8676f67-d139-45c8-9ca6-325572125f71",
+    "android_mapping_id": "a8676f67-d139-45c8-9ca6-325572125f71",
+    "breadcrumbs": [
+      {
+        "timestamp": "2026-10-24T10:29:00.000Z",
+        "category": "ui",
+        "message": "tap",
+        "level": "info"
+      }
+    ],
+    "user": {
+      "id": "old-user",
+      "email_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    },
+    "tags": {
+      "build": "old"
+    }
+  },
+  "signal": {
+    "number": 6,
+    "name": "SIGABRT",
+    "code": -1,
+    "code_name": "SI_QUEUE"
+  },
+  "abort_message": "Abort",
+  "threads": [
+    {
+      "name": "main",
+      "id": 12,
+      "frames": [
+        {
+          "pc": "0x75139164b0",
+          "rel_pc": "0x754b0",
+          "file_name": "/apex/com.android.runtime/lib64/bionic/libc.so",
+          "build_id": "f2ee009c5f1631f9819057446c9d2fa3",
+          "function_name": "abort",
+          "function_offset": "0x9c"
+        },
+        {
+          "pc": "0x71e45615d4",
+          "rel_pc": "0xc15d4",
+          "file_name": "/data/app/~~kU4W7goN2wFAHXdI1FBwbA==/dev.wasmwatch.spike.spike_app-9TOsJeWopZiPXa9oDhLlZA==/base.apk",
+          "build_id": "7a3ef930d1d5a7fd3fa36f070e4eb119"
+        },
+        {
+          "pc": "0x71e46c70b4",
+          "rel_pc": "0x2270b4",
+          "file_name": "/data/app/~~kU4W7goN2wFAHXdI1FBwbA==/dev.wasmwatch.spike.spike_app-9TOsJeWopZiPXa9oDhLlZA==/base.apk",
+          "build_id": "7a3ef930d1d5a7fd3fa36f070e4eb119"
+        },
+        {
+          "pc": "0x71e46c6b9c",
+          "rel_pc": "0x226b9c",
+          "file_name": "/data/app/~~kU4W7goN2wFAHXdI1FBwbA==/dev.wasmwatch.spike.spike_app-9TOsJeWopZiPXa9oDhLlZA==/base.apk",
+          "build_id": "7a3ef930d1d5a7fd3fa36f070e4eb119"
+        },
+        {
+          "pc": "0x71e4714edc",
+          "rel_pc": "0x274edc",
+          "file_name": "/data/app/~~kU4W7goN2wFAHXdI1FBwbA==/dev.wasmwatch.spike.spike_app-9TOsJeWopZiPXa9oDhLlZA==/base.apk",
+          "build_id": "7a3ef930d1d5a7fd3fa36f070e4eb119"
+        },
+        {
+          "pc": "0x71e4714e00",
+          "rel_pc": "0x274e00",
+          "file_name": "/data/app/~~kU4W7goN2wFAHXdI1FBwbA==/dev.wasmwatch.spike.spike_app-9TOsJeWopZiPXa9oDhLlZA==/base.apk",
+          "build_id": "7a3ef930d1d5a7fd3fa36f070e4eb119"
+        },
+        {
+          "pc": "0x71e4714894",
+          "rel_pc": "0x274894",
+          "file_name": "/data/app/~~kU4W7goN2wFAHXdI1FBwbA==/dev.wasmwatch.spike.spike_app-9TOsJeWopZiPXa9oDhLlZA==/base.apk",
+          "build_id": "7a3ef930d1d5a7fd3fa36f070e4eb119"
+        },
+        {
+          "pc": "0x71e456a51c",
+          "rel_pc": "0xca51c",
+          "file_name": "/data/app/~~kU4W7goN2wFAHXdI1FBwbA==/dev.wasmwatch.spike.spike_app-9TOsJeWopZiPXa9oDhLlZA==/base.apk",
+          "build_id": "7a3ef930d1d5a7fd3fa36f070e4eb119"
+        },
+        {
+          "pc": "0x71e46f35a4",
+          "rel_pc": "0x2535a4",
+          "file_name": "/data/app/~~kU4W7goN2wFAHXdI1FBwbA==/dev.wasmwatch.spike.spike_app-9TOsJeWopZiPXa9oDhLlZA==/base.apk",
+          "build_id": "7a3ef930d1d5a7fd3fa36f070e4eb119"
+        },
+        {
+          "pc": "0x71e46f3478",
+          "rel_pc": "0x253478",
+          "file_name": "/data/app/~~kU4W7goN2wFAHXdI1FBwbA==/dev.wasmwatch.spike.spike_app-9TOsJeWopZiPXa9oDhLlZA==/base.apk",
+          "build_id": "7a3ef930d1d5a7fd3fa36f070e4eb119"
+        },
+        {
+          "pc": "0x71e45693ac",
+          "rel_pc": "0xc93ac",
+          "file_name": "/data/app/~~kU4W7goN2wFAHXdI1FBwbA==/dev.wasmwatch.spike.spike_app-9TOsJeWopZiPXa9oDhLlZA==/base.apk",
+          "build_id": "7a3ef930d1d5a7fd3fa36f070e4eb119"
+        },
+        {
+          "pc": "0x71e456909c",
+          "rel_pc": "0xc909c",
+          "file_name": "/data/app/~~kU4W7goN2wFAHXdI1FBwbA==/dev.wasmwatch.spike.spike_app-9TOsJeWopZiPXa9oDhLlZA==/base.apk",
+          "build_id": "7a3ef930d1d5a7fd3fa36f070e4eb119"
+        },
+        {
+          "pc": "0x71e46c5d74",
+          "rel_pc": "0x225d74",
+          "file_name": "/data/app/~~kU4W7goN2wFAHXdI1FBwbA==/dev.wasmwatch.spike.spike_app-9TOsJeWopZiPXa9oDhLlZA==/base.apk",
+          "build_id": "7a3ef930d1d5a7fd3fa36f070e4eb119"
+        },
+        {
+          "pc": "0x71e46f4de8",
+          "rel_pc": "0x254de8",
+          "file_name": "/data/app/~~kU4W7goN2wFAHXdI1FBwbA==/dev.wasmwatch.spike.spike_app-9TOsJeWopZiPXa9oDhLlZA==/base.apk",
+          "build_id": "7a3ef930d1d5a7fd3fa36f070e4eb119"
+        },
+        {
+          "pc": "0x71e4714894",
+          "rel_pc": "0x274894",
+          "file_name": "/data/app/~~kU4W7goN2wFAHXdI1FBwbA==/dev.wasmwatch.spike.spike_app-9TOsJeWopZiPXa9oDhLlZA==/base.apk",
+          "build_id": "7a3ef930d1d5a7fd3fa36f070e4eb119"
+        },
+        {
+          "pc": "0x71e456a51c",
+          "rel_pc": "0xca51c",
+          "file_name": "/data/app/~~kU4W7goN2wFAHXdI1FBwbA==/dev.wasmwatch.spike.spike_app-9TOsJeWopZiPXa9oDhLlZA==/base.apk",
+          "build_id": "7a3ef930d1d5a7fd3fa36f070e4eb119"
+        },
+        {
+          "pc": "0x71e46f35a4",
+          "rel_pc": "0x2535a4",
+          "file_name": "/data/app/~~kU4W7goN2wFAHXdI1FBwbA==/dev.wasmwatch.spike.spike_app-9TOsJeWopZiPXa9oDhLlZA==/base.apk",
+          "build_id": "7a3ef930d1d5a7fd3fa36f070e4eb119"
+        },
+        {
+          "pc": "0x71e46f3478",
+          "rel_pc": "0x253478",
+          "file_name": "/data/app/~~kU4W7goN2wFAHXdI1FBwbA==/dev.wasmwatch.spike.spike_app-9TOsJeWopZiPXa9oDhLlZA==/base.apk",
+          "build_id": "7a3ef930d1d5a7fd3fa36f070e4eb119"
+        },
+        {
+          "pc": "0x71e45693ac",
+          "rel_pc": "0xc93ac",
+          "file_name": "/data/app/~~kU4W7goN2wFAHXdI1FBwbA==/dev.wasmwatch.spike.spike_app-9TOsJeWopZiPXa9oDhLlZA==/base.apk",
+          "build_id": "7a3ef930d1d5a7fd3fa36f070e4eb119"
+        },
+        {
+          "pc": "0x71e4575530",
+          "rel_pc": "0xd5530",
+          "file_name": "/data/app/~~kU4W7goN2wFAHXdI1FBwbA==/dev.wasmwatch.spike.spike_app-9TOsJeWopZiPXa9oDhLlZA==/base.apk",
+          "build_id": "7a3ef930d1d5a7fd3fa36f070e4eb119"
+        },
+        {
+          "pc": "0x71e46c8344",
+          "rel_pc": "0x228344",
+          "file_name": "/data/app/~~kU4W7goN2wFAHXdI1FBwbA==/dev.wasmwatch.spike.spike_app-9TOsJeWopZiPXa9oDhLlZA==/base.apk",
+          "build_id": "7a3ef930d1d5a7fd3fa36f070e4eb119"
+        },
+        {
+          "pc": "0x71e46f2a7c",
+          "rel_pc": "0x252a7c",
+          "file_name": "/data/app/~~kU4W7goN2wFAHXdI1FBwbA==/dev.wasmwatch.spike.spike_app-9TOsJeWopZiPXa9oDhLlZA==/base.apk",
+          "build_id": "7a3ef930d1d5a7fd3fa36f070e4eb119"
+        },
+        {
+          "pc": "0x71e467e134",
+          "rel_pc": "0x1de134",
+          "file_name": "/data/app/~~kU4W7goN2wFAHXdI1FBwbA==/dev.wasmwatch.spike.spike_app-9TOsJeWopZiPXa9oDhLlZA==/base.apk",
+          "build_id": "7a3ef930d1d5a7fd3fa36f070e4eb119"
+        },
+        {
+          "pc": "0x71e467e0b4",
+          "rel_pc": "0x1de0b4",
+          "file_name": "/data/app/~~kU4W7goN2wFAHXdI1FBwbA==/dev.wasmwatch.spike.spike_app-9TOsJeWopZiPXa9oDhLlZA==/base.apk",
+          "build_id": "7a3ef930d1d5a7fd3fa36f070e4eb119"
+        },
+        {
+          "pc": "0x71e467be9c",
+          "rel_pc": "0x1dbe9c",
+          "file_name": "/data/app/~~kU4W7goN2wFAHXdI1FBwbA==/dev.wasmwatch.spike.spike_app-9TOsJeWopZiPXa9oDhLlZA==/base.apk",
+          "build_id": "7a3ef930d1d5a7fd3fa36f070e4eb119"
+        },
+        {
+          "pc": "0x71e467c444",
+          "rel_pc": "0x1dc444",
+          "file_name": "/data/app/~~kU4W7goN2wFAHXdI1FBwbA==/dev.wasmwatch.spike.spike_app-9TOsJeWopZiPXa9oDhLlZA==/base.apk",
+          "build_id": "7a3ef930d1d5a7fd3fa36f070e4eb119"
+        },
+        {
+          "pc": "0x71e467c40c",
+          "rel_pc": "0x1dc40c",
+          "file_name": "/data/app/~~kU4W7goN2wFAHXdI1FBwbA==/dev.wasmwatch.spike.spike_app-9TOsJeWopZiPXa9oDhLlZA==/base.apk",
+          "build_id": "7a3ef930d1d5a7fd3fa36f070e4eb119"
+        },
+        {
+          "pc": "0x71e4681e00",
+          "rel_pc": "0x1e1e00",
+          "file_name": "/data/app/~~kU4W7goN2wFAHXdI1FBwbA==/dev.wasmwatch.spike.spike_app-9TOsJeWopZiPXa9oDhLlZA==/base.apk",
+          "build_id": "7a3ef930d1d5a7fd3fa36f070e4eb119"
+        },
+        {
+          "pc": "0x71e467d60c",
+          "rel_pc": "0x1dd60c",
+          "file_name": "/data/app/~~kU4W7goN2wFAHXdI1FBwbA==/dev.wasmwatch.spike.spike_app-9TOsJeWopZiPXa9oDhLlZA==/base.apk",
+          "build_id": "7a3ef930d1d5a7fd3fa36f070e4eb119"
+        },
+        {
+          "pc": "0x71e467dac8",
+          "rel_pc": "0x1ddac8",
+          "file_name": "/data/app/~~kU4W7goN2wFAHXdI1FBwbA==/dev.wasmwatch.spike.spike_app-9TOsJeWopZiPXa9oDhLlZA==/base.apk",
+          "build_id": "7a3ef930d1d5a7fd3fa36f070e4eb119"
+        },
+        {
+          "pc": "0x71e470af3c",
+          "rel_pc": "0x26af3c",
+          "file_name": "/data/app/~~kU4W7goN2wFAHXdI1FBwbA==/dev.wasmwatch.spike.spike_app-9TOsJeWopZiPXa9oDhLlZA==/base.apk",
+          "build_id": "7a3ef930d1d5a7fd3fa36f070e4eb119"
+        },
+        {
+          "pc": "0x71e4690ad8",
+          "rel_pc": "0x1f0ad8",
+          "file_name": "/data/app/~~kU4W7goN2wFAHXdI1FBwbA==/dev.wasmwatch.spike.spike_app-9TOsJeWopZiPXa9oDhLlZA==/base.apk",
+          "build_id": "7a3ef930d1d5a7fd3fa36f070e4eb119"
+        },
+        {
+          "pc": "0x71e46f2a7c",
+          "rel_pc": "0x252a7c",
+          "file_name": "/data/app/~~kU4W7goN2wFAHXdI1FBwbA==/dev.wasmwatch.spike.spike_app-9TOsJeWopZiPXa9oDhLlZA==/base.apk",
+          "build_id": "7a3ef930d1d5a7fd3fa36f070e4eb119"
+        },
+        {
+          "pc": "0x71e467e134",
+          "rel_pc": "0x1de134",
+          "file_name": "/data/app/~~kU4W7goN2wFAHXdI1FBwbA==/dev.wasmwatch.spike.spike_app-9TOsJeWopZiPXa9oDhLlZA==/base.apk",
+          "build_id": "7a3ef930d1d5a7fd3fa36f070e4eb119"
+        },
+        {
+          "pc": "0x71e467e0b4",
+          "rel_pc": "0x1de0b4",
+          "file_name": "/data/app/~~kU4W7goN2wFAHXdI1FBwbA==/dev.wasmwatch.spike.spike_app-9TOsJeWopZiPXa9oDhLlZA==/base.apk",
+          "build_id": "7a3ef930d1d5a7fd3fa36f070e4eb119"
+        },
+        {
+          "pc": "0x71e467be9c",
+          "rel_pc": "0x1dbe9c",
+          "file_name": "/data/app/~~kU4W7goN2wFAHXdI1FBwbA==/dev.wasmwatch.spike.spike_app-9TOsJeWopZiPXa9oDhLlZA==/base.apk",
+          "build_id": "7a3ef930d1d5a7fd3fa36f070e4eb119"
+        },
+        {
+          "pc": "0x71e4690558",
+          "rel_pc": "0x1f0558",
+          "file_name": "/data/app/~~kU4W7goN2wFAHXdI1FBwbA==/dev.wasmwatch.spike.spike_app-9TOsJeWopZiPXa9oDhLlZA==/base.apk",
+          "build_id": "7a3ef930d1d5a7fd3fa36f070e4eb119"
+        },
+        {
+          "pc": "0x71e46904f0",
+          "rel_pc": "0x1f04f0",
+          "file_name": "/data/app/~~kU4W7goN2wFAHXdI1FBwbA==/dev.wasmwatch.spike.spike_app-9TOsJeWopZiPXa9oDhLlZA==/base.apk",
+          "build_id": "7a3ef930d1d5a7fd3fa36f070e4eb119"
+        },
+        {
+          "pc": "0x71e46904b8",
+          "rel_pc": "0x1f04b8",
+          "file_name": "/data/app/~~kU4W7goN2wFAHXdI1FBwbA==/dev.wasmwatch.spike.spike_app-9TOsJeWopZiPXa9oDhLlZA==/base.apk",
+          "build_id": "7a3ef930d1d5a7fd3fa36f070e4eb119"
+        },
+        {
+          "pc": "0x71e46f2a7c",
+          "rel_pc": "0x252a7c",
+          "file_name": "/data/app/~~kU4W7goN2wFAHXdI1FBwbA==/dev.wasmwatch.spike.spike_app-9TOsJeWopZiPXa9oDhLlZA==/base.apk",
+          "build_id": "7a3ef930d1d5a7fd3fa36f070e4eb119"
+        },
+        {
+          "pc": "0x71e467e134",
+          "rel_pc": "0x1de134",
+          "file_name": "/data/app/~~kU4W7goN2wFAHXdI1FBwbA==/dev.wasmwatch.spike.spike_app-9TOsJeWopZiPXa9oDhLlZA==/base.apk",
+          "build_id": "7a3ef930d1d5a7fd3fa36f070e4eb119"
+        },
+        {
+          "pc": "0x71e467e0b4",
+          "rel_pc": "0x1de0b4",
+          "file_name": "/data/app/~~kU4W7goN2wFAHXdI1FBwbA==/dev.wasmwatch.spike.spike_app-9TOsJeWopZiPXa9oDhLlZA==/base.apk",
+          "build_id": "7a3ef930d1d5a7fd3fa36f070e4eb119"
+        },
+        {
+          "pc": "0x71e469d80c",
+          "rel_pc": "0x1fd80c",
+          "file_name": "/data/app/~~kU4W7goN2wFAHXdI1FBwbA==/dev.wasmwatch.spike.spike_app-9TOsJeWopZiPXa9oDhLlZA==/base.apk",
+          "build_id": "7a3ef930d1d5a7fd3fa36f070e4eb119"
+        },
+        {
+          "pc": "0x71e4678b00",
+          "rel_pc": "0x1d8b00",
+          "file_name": "/data/app/~~kU4W7goN2wFAHXdI1FBwbA==/dev.wasmwatch.spike.spike_app-9TOsJeWopZiPXa9oDhLlZA==/base.apk",
+          "build_id": "7a3ef930d1d5a7fd3fa36f070e4eb119"
+        },
+        {
+          "pc": "0x71e4678a4c",
+          "rel_pc": "0x1d8a4c",
+          "file_name": "/data/app/~~kU4W7goN2wFAHXdI1FBwbA==/dev.wasmwatch.spike.spike_app-9TOsJeWopZiPXa9oDhLlZA==/base.apk",
+          "build_id": "7a3ef930d1d5a7fd3fa36f070e4eb119"
+        },
+        {
+          "pc": "0x71e4568afc",
+          "rel_pc": "0xc8afc",
+          "file_name": "/data/app/~~kU4W7goN2wFAHXdI1FBwbA==/dev.wasmwatch.spike.spike_app-9TOsJeWopZiPXa9oDhLlZA==/base.apk",
+          "build_id": "7a3ef930d1d5a7fd3fa36f070e4eb119"
+        },
+        {
+          "pc": "0x71e46f28bc",
+          "rel_pc": "0x2528bc",
+          "file_name": "/data/app/~~kU4W7goN2wFAHXdI1FBwbA==/dev.wasmwatch.spike.spike_app-9TOsJeWopZiPXa9oDhLlZA==/base.apk",
+          "build_id": "7a3ef930d1d5a7fd3fa36f070e4eb119"
+        },
+        {
+          "pc": "0x71e4568a64",
+          "rel_pc": "0xc8a64",
+          "file_name": "/data/app/~~kU4W7goN2wFAHXdI1FBwbA==/dev.wasmwatch.spike.spike_app-9TOsJeWopZiPXa9oDhLlZA==/base.apk",
+          "build_id": "7a3ef930d1d5a7fd3fa36f070e4eb119"
+        },
+        {
+          "pc": "0x71e4563cd8",
+          "rel_pc": "0xc3cd8",
+          "file_name": "/data/app/~~kU4W7goN2wFAHXdI1FBwbA==/dev.wasmwatch.spike.spike_app-9TOsJeWopZiPXa9oDhLlZA==/base.apk",
+          "build_id": "7a3ef930d1d5a7fd3fa36f070e4eb119"
+        },
+        {
+          "pc": "0x71e8d82154",
+          "rel_pc": "0x8e7154",
+          "file_name": "/data/app/~~kU4W7goN2wFAHXdI1FBwbA==/dev.wasmwatch.spike.spike_app-9TOsJeWopZiPXa9oDhLlZA==/base.apk!libflutter.so",
+          "build_id": "fc84702ceb4ef3082433a3a76c506f6532c31c3b"
+        },
+        {
+          "pc": "0x71e8ec7de0",
+          "rel_pc": "0xa2cde0",
+          "file_name": "/data/app/~~kU4W7goN2wFAHXdI1FBwbA==/dev.wasmwatch.spike.spike_app-9TOsJeWopZiPXa9oDhLlZA==/base.apk!libflutter.so",
+          "build_id": "fc84702ceb4ef3082433a3a76c506f6532c31c3b"
+        },
+        {
+          "pc": "0x71e8ceb354",
+          "rel_pc": "0x850354",
+          "file_name": "/data/app/~~kU4W7goN2wFAHXdI1FBwbA==/dev.wasmwatch.spike.spike_app-9TOsJeWopZiPXa9oDhLlZA==/base.apk!libflutter.so",
+          "build_id": "fc84702ceb4ef3082433a3a76c506f6532c31c3b"
+        },
+        {
+          "pc": "0x71e89778b8",
+          "rel_pc": "0x4dc8b8",
+          "file_name": "/data/app/~~kU4W7goN2wFAHXdI1FBwbA==/dev.wasmwatch.spike.spike_app-9TOsJeWopZiPXa9oDhLlZA==/base.apk!libflutter.so",
+          "build_id": "fc84702ceb4ef3082433a3a76c506f6532c31c3b"
+        },
+        {
+          "pc": "0x71e897b77c",
+          "rel_pc": "0x4e077c",
+          "file_name": "/data/app/~~kU4W7goN2wFAHXdI1FBwbA==/dev.wasmwatch.spike.spike_app-9TOsJeWopZiPXa9oDhLlZA==/base.apk!libflutter.so",
+          "build_id": "fc84702ceb4ef3082433a3a76c506f6532c31c3b"
+        },
+        {
+          "pc": "0x75416e93c4",
+          "rel_pc": "0x1b3c4",
+          "file_name": "/system/lib64/libutils.so",
+          "build_id": "37e757db39656b6e1b2383db61e3d767",
+          "function_name": "android::Looper::pollOnce(int, int*, int*, void**)",
+          "function_offset": "0x52c"
+        },
+        {
+          "pc": "0x7537a9e610",
+          "rel_pc": "0x1d5610",
+          "file_name": "/system/lib64/libandroid_runtime.so",
+          "build_id": "01e2931b3e7e79e8f19cd56ed189bf7f",
+          "function_name": "android::android_os_MessageQueue_nativePollOnce(_JNIEnv*, _jobject*, long, int)",
+          "function_offset": "0x2c"
+        },
+        {
+          "pc": "0x7262df40",
+          "rel_pc": "0x821f40",
+          "file_name": "/system/framework/arm64/boot-framework.oat",
+          "build_id": "c318a2dc09a2631cef596cd657294e6350f87945",
+          "function_name": "art_jni_trampoline",
+          "function_offset": "0x70"
+        },
+        {
+          "pc": "0x7231479c",
+          "rel_pc": "0x50879c",
+          "file_name": "/system/framework/arm64/boot-framework.oat",
+          "build_id": "c318a2dc09a2631cef596cd657294e6350f87945",
+          "function_name": "android.os.MessageQueue.nextLegacy",
+          "function_offset": "0xfc"
+        },
+        {
+          "pc": "0x72319560",
+          "rel_pc": "0x50d560",
+          "file_name": "/system/framework/arm64/boot-framework.oat",
+          "build_id": "c318a2dc09a2631cef596cd657294e6350f87945",
+          "function_name": "android.os.MessageQueue.next",
+          "function_offset": "0x30"
+        },
+        {
+          "pc": "0x7230c4d8",
+          "rel_pc": "0x5004d8",
+          "file_name": "/system/framework/arm64/boot-framework.oat",
+          "build_id": "c318a2dc09a2631cef596cd657294e6350f87945",
+          "function_name": "android.os.Looper.loopOnce",
+          "function_offset": "0x58"
+        },
+        {
+          "pc": "0x7230c404",
+          "rel_pc": "0x500404",
+          "file_name": "/system/framework/arm64/boot-framework.oat",
+          "build_id": "c318a2dc09a2631cef596cd657294e6350f87945",
+          "function_name": "android.os.Looper.loop",
+          "function_offset": "0xf4"
+        },
+        {
+          "pc": "0x72057890",
+          "rel_pc": "0x24b890",
+          "file_name": "/system/framework/arm64/boot-framework.oat",
+          "build_id": "c318a2dc09a2631cef596cd657294e6350f87945",
+          "function_name": "android.app.ActivityThread.main",
+          "function_offset": "0x5a0"
+        },
+        {
+          "pc": "0x72762ce060",
+          "rel_pc": "0x2ce060",
+          "file_name": "/apex/com.android.art/lib64/libart.so",
+          "build_id": "6cac8d43981d3cdaec56bfd359a7c85c",
+          "function_name": "art_quick_invoke_static_stub",
+          "function_offset": "0x280"
+        },
+        {
+          "pc": "0x72762c400c",
+          "rel_pc": "0x2c400c",
+          "file_name": "/apex/com.android.art/lib64/libart.so",
+          "build_id": "6cac8d43981d3cdaec56bfd359a7c85c",
+          "function_name": "_jobject* art::InvokeMethod<(art::PointerSize)8>(art::ScopedObjectAccessAlreadyRunnable const&, _jobject*, _jobject*, _jobject*, unsigned long)",
+          "function_offset": "0x228"
+        },
+        {
+          "pc": "0x72765a55a4",
+          "rel_pc": "0x5a55a4",
+          "file_name": "/apex/com.android.art/lib64/libart.so",
+          "build_id": "6cac8d43981d3cdaec56bfd359a7c85c",
+          "function_name": "art::Method_invoke(_JNIEnv*, _jobject*, _jobject*, _jobjectArray*) (.__uniq.165753521025965369065708152063621506277)",
+          "function_offset": "0x20"
+        },
+        {
+          "pc": "0x71d12a64",
+          "rel_pc": "0x2e2a64",
+          "file_name": "/system/framework/arm64/boot.oat",
+          "build_id": "6c26aa71030665008b8f76bd9acdad1c97787b4d",
+          "function_name": "art_jni_trampoline",
+          "function_offset": "0x74"
+        },
+        {
+          "pc": "0x725e4614",
+          "rel_pc": "0x7d8614",
+          "file_name": "/system/framework/arm64/boot-framework.oat",
+          "build_id": "c318a2dc09a2631cef596cd657294e6350f87945",
+          "function_name": "com.android.internal.os.RuntimeInit$MethodAndArgsCaller.run",
+          "function_offset": "0x74"
+        },
+        {
+          "pc": "0x725eb494",
+          "rel_pc": "0x7df494",
+          "file_name": "/system/framework/arm64/boot-framework.oat",
+          "build_id": "c318a2dc09a2631cef596cd657294e6350f87945",
+          "function_name": "com.android.internal.os.ZygoteInit.main",
+          "function_offset": "0xba4"
+        },
+        {
+          "pc": "0x72762ce060",
+          "rel_pc": "0x2ce060",
+          "file_name": "/apex/com.android.art/lib64/libart.so",
+          "build_id": "6cac8d43981d3cdaec56bfd359a7c85c",
+          "function_name": "art_quick_invoke_static_stub",
+          "function_offset": "0x280"
+        },
+        {
+          "pc": "0x72762ccbb8",
+          "rel_pc": "0x2ccbb8",
+          "file_name": "/apex/com.android.art/lib64/libart.so",
+          "build_id": "6cac8d43981d3cdaec56bfd359a7c85c",
+          "function_name": "art::JValue art::InvokeWithVarArgs<_jmethodID*>(art::ScopedObjectAccessAlreadyRunnable const&, _jobject*, _jmethodID*, std::__va_list)",
+          "function_offset": "0x36c"
+        },
+        {
+          "pc": "0x727660ad10",
+          "rel_pc": "0x60ad10",
+          "file_name": "/apex/com.android.art/lib64/libart.so",
+          "build_id": "6cac8d43981d3cdaec56bfd359a7c85c",
+          "function_name": "art::JNI<true>::CallStaticVoidMethodV(_JNIEnv*, _jclass*, _jmethodID*, std::__va_list)",
+          "function_offset": "0xb8"
+        },
+        {
+          "pc": "0x75379d85cc",
+          "rel_pc": "0x10f5cc",
+          "file_name": "/system/lib64/libandroid_runtime.so",
+          "build_id": "01e2931b3e7e79e8f19cd56ed189bf7f",
+          "function_name": "_JNIEnv::CallStaticVoidMethod(_jclass*, _jmethodID*, ...)",
+          "function_offset": "0x68"
+        },
+        {
+          "pc": "0x7537a00830",
+          "rel_pc": "0x137830",
+          "file_name": "/system/lib64/libandroid_runtime.so",
+          "build_id": "01e2931b3e7e79e8f19cd56ed189bf7f",
+          "function_name": "android::AndroidRuntime::start(char const*, android::Vector<android::String8> const&, bool)",
+          "function_offset": "0x394"
+        },
+        {
+          "pc": "0x646bfa8590",
+          "rel_pc": "0x4590",
+          "file_name": "/system/bin/app_process64",
+          "build_id": "580d8787e9cbe0aa50f7a28ea164516b",
+          "function_name": "main",
+          "function_offset": "0x4dc"
+        },
+        {
+          "pc": "0x751390a534",
+          "rel_pc": "0x69534",
+          "file_name": "/apex/com.android.runtime/lib64/bionic/libc.so",
+          "build_id": "f2ee009c5f1631f9819057446c9d2fa3",
+          "function_name": "__libc_init",
+          "function_offset": "0x78"
+        }
+      ]
+    }
+  ],
+  "images": [
+    {
+      "file_name": "/apex/com.android.runtime/lib64/bionic/libc.so",
+      "build_id": "f2ee009c5f1631f9819057446c9d2fa3",
+      "image_addr": "0x75138a1000"
+    },
+    {
+      "file_name": "/data/app/~~kU4W7goN2wFAHXdI1FBwbA==/dev.wasmwatch.spike.spike_app-9TOsJeWopZiPXa9oDhLlZA==/base.apk",
+      "build_id": "7a3ef930d1d5a7fd3fa36f070e4eb119",
+      "image_addr": "0x71e44a0000"
+    },
+    {
+      "file_name": "/data/app/~~kU4W7goN2wFAHXdI1FBwbA==/dev.wasmwatch.spike.spike_app-9TOsJeWopZiPXa9oDhLlZA==/base.apk!libflutter.so",
+      "build_id": "fc84702ceb4ef3082433a3a76c506f6532c31c3b",
+      "image_addr": "0x71e849b000"
+    },
+    {
+      "file_name": "/system/lib64/libutils.so",
+      "build_id": "37e757db39656b6e1b2383db61e3d767",
+      "image_addr": "0x75416ce000"
+    },
+    {
+      "file_name": "/system/lib64/libandroid_runtime.so",
+      "build_id": "01e2931b3e7e79e8f19cd56ed189bf7f",
+      "image_addr": "0x75378c9000"
+    },
+    {
+      "file_name": "/system/framework/arm64/boot-framework.oat",
+      "build_id": "c318a2dc09a2631cef596cd657294e6350f87945",
+      "image_addr": "0x71e0c000"
+    },
+    {
+      "file_name": "/apex/com.android.art/lib64/libart.so",
+      "build_id": "6cac8d43981d3cdaec56bfd359a7c85c",
+      "image_addr": "0x7276000000"
+    },
+    {
+      "file_name": "/system/framework/arm64/boot.oat",
+      "build_id": "6c26aa71030665008b8f76bd9acdad1c97787b4d",
+      "image_addr": "0x71a30000"
+    },
+    {
+      "file_name": "/system/bin/app_process64",
+      "build_id": "580d8787e9cbe0aa50f7a28ea164516b",
+      "image_addr": "0x646bfa4000"
+    }
+  ],
+  "exit": {
+    "reason": "CRASH_NATIVE",
+    "description": "Input dispatching timed out",
+    "status": 0,
+    "importance": 100,
+    "pss_kb": 10,
+    "rss_kb": 20,
+    "timestamp_ms": 1792837801000,
+    "process_name": "dev.example"
+  }
+}

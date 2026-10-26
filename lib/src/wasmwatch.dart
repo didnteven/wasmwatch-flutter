@@ -17,10 +17,17 @@ import 'transport/offline_buffer.dart';
 import 'wasm/loader_check.dart';
 import 'web/browser_error_hooks_stub.dart'
     if (dart.library.js_interop) 'web/browser_error_hooks.dart';
+import 'package:flutter/foundation.dart';
+import 'native/install_id.dart';
+import 'native/native_bridge.dart';
+import 'native/native_scope.dart';
 
 class WasmWatch {
   WasmWatch._();
   static Hub? _hub;
+  static NativeScopeSync? _nativeScope;
+  static StreamSubscription<void>? _nativeReportsSubscription;
+  static final _nativeReportIds = <String>{};
   static BrowserErrorHooks? _browserHooks;
   static FlutterErrorIntegration? _flutterIntegration;
   static IsolateErrorIntegration? _isolateIntegration;
@@ -80,10 +87,9 @@ class WasmWatch {
     } else {
       await ZoneIntegration.runGuarded(
         start,
-        onError: (error, stack) =>
-            _hub?.client.captureException(error,
-                stackTrace: stack,
-                mechanism: const {'type': 'zone', 'handled': false}),
+        onError: (error, stack) => _hub?.client.captureException(error,
+            stackTrace: stack,
+            mechanism: const {'type': 'zone', 'handled': false}),
         onPrint: resolved.capturePrintBreadcrumbs
             ? (line) {
                 if (_hub != null &&
@@ -103,7 +109,12 @@ class WasmWatch {
   ) async {
     OfflineBuffer? offlineBuffer;
     SharedPreferences? preferences;
-    if (client == null || options.trackSessions) {
+    final bridge = !kIsWeb &&
+            (defaultTargetPlatform == TargetPlatform.android ||
+                defaultTargetPlatform == TargetPlatform.iOS)
+        ? NativeCrashBridge.instance
+        : null;
+    if (client == null || options.trackSessions || bridge != null) {
       try {
         preferences = await SharedPreferences.getInstance();
         if (client == null) {
@@ -132,23 +143,108 @@ class WasmWatch {
     if (options.autoInstallFlutterErrorHandlers) {
       _flutterIntegration = FlutterErrorIntegration()..install(activeClient);
     }
+    String? installId;
+    if (bridge != null) {
+      try {
+        installId = await getInstallId(preferences);
+      } catch (error, stack) {
+        activeClient.suppressInternalError(error, stack);
+      }
+      _nativeScope = NativeScopeSync(
+          bridge: bridge,
+          scope: () => _hub!.scope,
+          sessionId: () =>
+              activeClient.sessionTracker?.context?['id'] as String?,
+          onError: activeClient.suppressInternalError);
+      _hub!.onScopeChanged = () => _nativeScope?.update();
+    }
     if (options.trackSessions) {
       final tracker = SessionTracker(
-        release: options.release?.isNotEmpty == true ? options.release! : 'unknown',
+        release:
+            options.release?.isNotEmpty == true ? options.release! : 'unknown',
         environment: options.environment!,
         platform: activeClient.platform,
         preferences: preferences,
         clock: activeClient.clock,
         onUpdate: activeClient.sendSession,
+        onBegin: () => _nativeScope?.update(sessionBegin: true),
       );
       activeClient.sessionTracker = tracker;
-      await tracker.start();
+      await tracker.start(deferPrevious: bridge != null, installId: installId);
     }
+    if (!options.trackSessions) _nativeScope?.update(sessionBegin: true);
     if (options.captureLifecycleBreadcrumbs || options.trackSessions) {
       _lifecycle = _LifecycleBreadcrumbs();
       WidgetsBinding.instance.addObserver(_lifecycle!);
     }
+    if (bridge != null) {
+      // Neither native trace recovery nor event delivery delays app startup.
+      final nativeInstallId = installId ?? await getInstallId(null);
+      final nativeHub = _hub;
+      void recover() {
+        if (!identical(_hub, nativeHub)) return;
+        // Native disk calls serialize themselves. A slow event send must not
+        // hold up a later crash diagnostic and its deferred session update.
+        unawaited(_startNative(activeClient, bridge, nativeInstallId));
+      }
+
+      _nativeReportsSubscription = bridge.reportsAvailable?.listen(
+          (_) => recover(),
+          onError: (Object error, StackTrace stack) =>
+              activeClient.suppressInternalError(error, stack));
+      recover();
+    }
     await activeClient.flushOffline();
+  }
+
+  static Future<void> _startNative(WasmWatchClient client,
+      NativeCrashBridge bridge, String installId) async {
+    final tracker = client.sessionTracker;
+    final hub = _hub;
+    try {
+      final reports = await bridge.start(
+          release: client.options.release?.isNotEmpty == true
+              ? client.options.release!
+              : 'unknown',
+          environment: client.options.environment,
+          installId: installId);
+      // Closing or reinitializing leaves reports pending for the next start.
+      if (!identical(_hub, hub)) return;
+      await tracker?.completeNativeReports(
+          reports, defaultTargetPlatform == TargetPlatform.iOS);
+      await _deliverNativeReports(client, bridge, reports);
+    } catch (error, stack) {
+      client.suppressInternalError(error, stack);
+      await tracker?.completeNativeReports(
+          const [], defaultTargetPlatform == TargetPlatform.iOS);
+    }
+  }
+
+  static Future<void> _deliverNativeReports(WasmWatchClient client,
+      NativeCrashBridge bridge, List<Map<String, Object?>> reports) async {
+    for (final report in reports) {
+      final id = report['id'];
+      if (id is! String || id.isEmpty || !_nativeReportIds.add(id)) continue;
+      final exits = report['kind'] == 'ios_exit_metrics';
+      var acknowledged = false;
+      try {
+        final event = exits ? null : client.nativeReportEvent(report);
+        if (exits
+            ? await client.sendAppExits(report)
+            : (event == null || await client.capturePrebuiltEvent(event))) {
+          try {
+            await bridge.ack([id]);
+            acknowledged = true;
+          } catch (error, stack) {
+            client.suppressInternalError(error, stack);
+          }
+        }
+      } catch (error, stack) {
+        client.suppressInternalError(error, stack);
+      } finally {
+        if (exits && !acknowledged) _nativeReportIds.remove(id);
+      }
+    }
   }
 
   /// Restore handlers, remove observers/listeners, and close the transport.
@@ -161,6 +257,11 @@ class WasmWatch {
   }
 
   static void _uninstall() {
+    unawaited(_nativeReportsSubscription?.cancel());
+    _nativeReportsSubscription = null;
+    _nativeScope?.close();
+    _nativeScope = null;
+    _hub?.onScopeChanged = null;
     _browserHooks?.close();
     _browserHooks = null;
     _flutterIntegration?.close();

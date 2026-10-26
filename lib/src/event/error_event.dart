@@ -23,8 +23,10 @@ class ErrorEvent {
     this.level = SeverityLevel.error,
     this.fingerprint,
     this.mechanism,
+    this.exceptionValues,
   });
 
+  final List<ExceptionValue>? exceptionValues;
   final String eventId;
   final DateTime timestamp;
   final String platform;
@@ -56,16 +58,19 @@ class ErrorEvent {
       if (release != null) 'release': release,
       if (environment != null) 'environment': environment,
       'exception': {
-        'values': [
-          {
-            'type': clean(exceptionType),
-            if (mechanism != null) 'mechanism': mechanism,
-            'value': clean(exceptionValue),
-            'stacktrace': {
-              'frames': frames.map((frame) => clean(frame.toJson())).toList()
-            },
-          },
-        ],
+        'values': exceptionValues != null
+            ? exceptionValues!.map((value) => clean(value.toJson())).toList()
+            : [
+                {
+                  'type': clean(exceptionType),
+                  if (mechanism != null) 'mechanism': mechanism,
+                  'value': clean(exceptionValue),
+                  'stacktrace': {
+                    'frames':
+                        frames.map((frame) => clean(frame.toJson())).toList()
+                  },
+                },
+              ],
       },
       'debug_meta': debugMeta
           .toJson(), // identifiers, not user data: the card regex mangles all-digit UUIDs
@@ -81,6 +86,27 @@ class ErrorEvent {
   }
 }
 
+/// One throwable, in capture order (outer throwable followed by its causes).
+class ExceptionValue {
+  const ExceptionValue(
+      {required this.type,
+      required this.value,
+      required this.frames,
+      required this.mechanism});
+  final String type;
+  final String value;
+  final List<RawStackFrame> frames;
+  final Map<String, Object?> mechanism;
+  Map<String, Object?> toJson() => {
+        'type': type,
+        'value': value,
+        'mechanism': mechanism,
+        'stacktrace': {
+          'frames': frames.map((frame) => frame.toJson()).toList()
+        },
+      };
+}
+
 class DebugMeta {
   const DebugMeta({this.images = const []});
   final List<DebugImage> images;
@@ -89,6 +115,21 @@ class DebugMeta {
 }
 
 class DebugImage {
+  /// A validated native/proguard image, or an existing serialized Dart image.
+  DebugImage.fromJson(Map<String, Object?> json)
+      : debugId = json['debug_id'] as String,
+        codeFile = json['code_file'] as String? ?? '',
+        type = json['type'] as String,
+        offsetKind = WasmOffsetKind.unknown,
+        buildId = json['build_id'] as String?,
+        os = json['os'] as String?,
+        arch = json['arch'] as String?,
+        isolateDsoBase = json['isolate_dso_base'] as String?,
+        vmDsoBase = json['vm_dso_base'] as String?,
+        release = json['release'] as String?,
+        debugFile = json['debug_file'] as String?,
+        _json = Map.unmodifiable(json);
+  final Map<String, Object?>? _json;
   const DebugImage({
     required this.debugId,
     required this.codeFile,
@@ -101,7 +142,7 @@ class DebugImage {
     this.vmDsoBase,
     this.release,
     this.debugFile,
-  });
+  }) : _json = null;
   final String debugId;
   final String codeFile;
   final String type;
@@ -113,7 +154,9 @@ class DebugImage {
   final WasmOffsetKind offsetKind;
   final String? release;
   final String? debugFile;
-  Map<String, Object?> toJson() => {
+  Map<String, Object?> toJson() =>
+      _json ??
+      {
         'type': type,
         'debug_id': debugId,
         'code_file': type == 'js' ? 'main.dart.js' : codeFile,

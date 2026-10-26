@@ -1,3 +1,14 @@
+## 0.7.0
+
+Native crash capture with the optional `wasmwatch_native` 0.2.0 plugin (same repository, `path: wasmwatch_native`).
+
+- Optional native bridge: discover `wasmwatch_native`, recover pending Android reports at init, synchronize scope and acknowledge reports after durable buffering.
+- Convert Java/Kotlin crashes, native tombstones, killed ANRs and OS exits into events with the crashed build's release, mapping ID, images and exit context.
+- Upgrade the previous process session to `crashed` when a recovered native report identifies it.
+- Recover iOS MetricKit crashes and app hangs with native Mach-O stacks and the original build identity. Verified on an iPhone: Swift and `abort()` crashes, with Dart frames resolved inside the native stack.
+- Send iOS daily exit counts as `app_exits`, removing a native report only after the server accepts it or rejects it permanently. Exit counts never create issues or change sessions. iOS hang and exit-count delivery are not yet verified on a device.
+- `upload_symbols`: `--android-mapping`/`--mapping-id` (R8), `--native-libs` (Android `.so`) and `--dsyms-dir` (iOS Runner and plugin dSYMs).
+
 ## 0.6.0
 
 - Uncaught Dart errors (`FlutterError.onError`, `PlatformDispatcher.onError`, zones, isolates) are sent as unhandled (`mechanism.handled: false`); `captureException` events are handled. The dashboard labels and filters unhandled issues.

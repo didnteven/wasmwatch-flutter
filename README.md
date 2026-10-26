@@ -12,7 +12,7 @@ dependencies:
   wasmwatch:
     git:
       url: https://github.com/didnteven/wasmwatch-flutter.git
-      ref: v0.6.0
+      ref: v0.7.0
 ```
 
 Then run `flutter pub get`.
@@ -103,8 +103,30 @@ crash; one the OS kills in the background ends normally. Users are random
 anonymous install IDs. Set `trackSessions: false` in `WasmWatchOptions` to opt
 out.
 
-Native crashes (Swift, Kotlin, C/C++), ANRs and app hangs are not captured yet;
-run Crashlytics or Sentry alongside WasmWatch for those.
+### Native crashes, ANRs and app hangs
+
+Add the optional `wasmwatch_native` plugin from this repository to capture
+Android Java/Kotlin and native crashes, killed ANRs and OS kills (Android 11+
+for exit records, 12+ for native stacks), and iOS 14+ MetricKit crashes, app
+hangs and daily exit counts. Reports are sent on the next launch.
+
+```yaml
+dependencies:
+  wasmwatch:
+    git:
+      url: https://github.com/didnteven/wasmwatch-flutter.git
+      ref: v0.7.0
+  wasmwatch_native:
+    git:
+      url: https://github.com/didnteven/wasmwatch-flutter.git
+      ref: v0.7.0
+      path: wasmwatch_native
+```
+
+Flutter registers the plugin automatically. For readable native stacks, also
+upload the R8 mapping and native libraries (Android) or the archive's dSYMs
+(iOS) with `upload_symbols`; see `wasmwatch_native/README.md`. Flutter engine
+frames are not symbolicated yet.
 
 ## Migrating an existing Flutter web app
 

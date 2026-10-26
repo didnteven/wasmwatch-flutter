@@ -1,0 +1,39 @@
+{
+  "v": 1,
+  "id": "exit-fixture",
+  "kind": "app_exit",
+  "timestamp_ms": 1792837800000,
+  "pid": 12,
+  "release": "2.1.0+57",
+  "environment": "production",
+  "install_id": "a8676f67-d139-45c8-9ca6-325572125f71",
+  "scope": {
+    "session_id": "c8676f67-d139-45c8-9ca6-325572125f71",
+    "android_mapping_id": "a8676f67-d139-45c8-9ca6-325572125f71",
+    "breadcrumbs": [
+      {
+        "timestamp": "2026-10-24T10:29:00.000Z",
+        "category": "ui",
+        "message": "tap",
+        "level": "info"
+      }
+    ],
+    "user": {
+      "id": "old-user",
+      "email_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    },
+    "tags": {
+      "build": "old"
+    }
+  },
+  "exit": {
+    "reason": "LOW_MEMORY",
+    "description": null,
+    "status": 0,
+    "importance": 100,
+    "pss_kb": 10,
+    "rss_kb": 20,
+    "timestamp_ms": 1792837801000,
+    "process_name": "dev.example"
+  }
+}

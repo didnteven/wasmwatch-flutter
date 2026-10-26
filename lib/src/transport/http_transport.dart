@@ -77,7 +77,11 @@ class HttpTransport {
           _permanent.remove(envelope);
           return true;
         }
-        if (response.statusCode != 429 && response.statusCode < 500) {
+        // Exit aggregates acknowledge only accepted or permanent 4xx replies.
+        // Keep the existing event/session redirect handling unchanged.
+        if (response.statusCode != 429 &&
+            response.statusCode < 500 &&
+            (response.statusCode >= 400 || !_isAppExits(envelope))) {
           _reject(envelope);
           return false;
         }
@@ -94,6 +98,14 @@ class HttpTransport {
       }
     }
     return false;
+  }
+
+  bool _isAppExits(String envelope) {
+    try {
+      return (jsonDecode(envelope.split('\n')[1]) as Map)['type'] == 'app_exits';
+    } catch (_) {
+      return false;
+    }
   }
 
   void close() => _client.close();
