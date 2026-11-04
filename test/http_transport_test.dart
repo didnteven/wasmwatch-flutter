@@ -28,6 +28,22 @@ void main() {
     expect(await transport.send('offline'), true);
     expect(times[1].difference(times[0]), const Duration(seconds: 6));
   });
+  test('a stalled connection fails the attempt instead of hanging', () async {
+    var calls = 0;
+    final transport = HttpTransport(dsn,
+        maxRetries: 1,
+        requestTimeout: const Duration(milliseconds: 50),
+        delay: (_) async {},
+        jitter: () => 0,
+        client: MockClient((r) {
+          calls++;
+          return Completer<http.Response>().future; // never answers
+        }));
+    expect(await transport.send('stalled').timeout(const Duration(seconds: 5)),
+        false);
+    expect(calls, 2); // the first attempt and one retry
+    expect(transport.shouldBuffer('stalled'), true); // kept for the next run
+  });
   test('permanent 4xx is not buffered and outgoing work is bounded', () async {
     final release = Completer<void>();
     var calls = 0;

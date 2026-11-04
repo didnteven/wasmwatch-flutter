@@ -58,8 +58,25 @@ void main() {
       [valid],
     );
     expect(calls.single.method, 'start');
-    expect(calls.single.arguments,
-        {'release': '1.0', 'environment': 'prod', 'install_id': 'install'});
+    expect(calls.single.arguments, {
+      'release': '1.0',
+      'environment': 'prod',
+      'install_id': 'install',
+      'app_hang_timeout_ms': 2000
+    });
+  });
+
+  test('iOS static and registered bridge forward the hang timeout', () async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
+    await WasmWatchNative.start(
+        release: 'r', installId: 'i', appHangTimeout: Duration.zero);
+    expect(calls.last.arguments['app_hang_timeout_ms'], 0);
+    WasmWatchNativeIOS.registerWith();
+    await NativeCrashBridge.instance!.start(
+        release: 'r',
+        installId: 'i',
+        appHangTimeout: const Duration(milliseconds: 3500));
+    expect(calls.last.arguments['app_hang_timeout_ms'], 3500);
   });
 
   test('scope is JSON and ack forwards ids', () async {

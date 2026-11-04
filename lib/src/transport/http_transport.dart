@@ -12,7 +12,8 @@ class HttpTransport {
       DateTime Function()? clock,
       Future<void> Function(Duration)? delay,
       double Function()? jitter,
-      this.maximumPending = 32})
+      this.maximumPending = 32,
+      this.requestTimeout = const Duration(seconds: 10)})
       : _client = client ?? http.Client(),
         _clock = clock ?? DateTime.now,
         _delay = delay ?? Future<void>.delayed,
@@ -22,6 +23,9 @@ class HttpTransport {
   final int maxRetries;
   final Duration baseDelay;
   final int maximumPending;
+
+  /// A stalled connection counts as a failed attempt instead of hanging forever.
+  final Duration requestTimeout;
   final DateTime Function() _clock;
   final Future<void> Function(Duration) _delay;
   final double Function() _jitter;
@@ -66,13 +70,15 @@ class HttpTransport {
     for (var attempt = 0; attempt <= maxRetries; attempt++) {
       await _waitCooldown();
       try {
-        final response = await _client.post(dsn.endpoint,
-            headers: {
-              'Content-Type': 'application/x-sentry-envelope',
-              'Authorization': 'Bearer ${dsn.publicKey}',
-              'X-WasmWatch-Project': dsn.projectId,
-            },
-            body: envelope);
+        final response = await _client
+            .post(dsn.endpoint,
+                headers: {
+                  'Content-Type': 'application/x-sentry-envelope',
+                  'Authorization': 'Bearer ${dsn.publicKey}',
+                  'X-WasmWatch-Project': dsn.projectId,
+                },
+                body: envelope)
+            .timeout(requestTimeout);
         if (response.statusCode >= 200 && response.statusCode < 300) {
           _permanent.remove(envelope);
           return true;
@@ -102,7 +108,8 @@ class HttpTransport {
 
   bool _isAppExits(String envelope) {
     try {
-      return (jsonDecode(envelope.split('\n')[1]) as Map)['type'] == 'app_exits';
+      return (jsonDecode(envelope.split('\n')[1]) as Map)['type'] ==
+          'app_exits';
     } catch (_) {
       return false;
     }

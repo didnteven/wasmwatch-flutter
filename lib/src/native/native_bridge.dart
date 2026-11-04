@@ -14,6 +14,7 @@ abstract class NativeCrashBridge {
     required String release,
     String? environment,
     required String installId,
+    Duration appHangTimeout = const Duration(seconds: 2),
   });
   Future<void> setScope(Map<String, Object?> scope);
   Future<void> ack(List<String> ids);

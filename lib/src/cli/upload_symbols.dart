@@ -1,3 +1,4 @@
+import 'flutter_engine.dart';
 import '../native/native_debug_id.dart';
 export '../native/native_debug_id.dart' show nativeDebugId;
 import 'dart:io';
@@ -6,11 +7,15 @@ import '../native/aot_identity.dart';
 import 'source_context.dart';
 import 'upload_client.dart';
 
-const uploadSymbolsHelp = '''Upload Flutter mobile debug symbols with pure Dart.
+const uploadSymbolsHelp = '''Upload Flutter mobile debug symbols.
 Usage: dart run wasmwatch:upload_symbols --symbols-dir build/symbols [options]
        dart run wasmwatch:upload_symbols --android-mapping mapping.txt --mapping-id UUID [options]
        dart run wasmwatch:upload_symbols --dsym App.framework.dSYM --symbols-dir build/symbols/ios [options]
-  --dsyms-dir DIR            Upload native dSYMs (App uses --dsym; Flutter is Phase 5)
+  --dsyms-dir DIR            Upload native dSYMs (Flutter requires --flutter-engine)
+  --flutter-engine [android|ios] Upload engine once per Flutter version per project; skip ready IDs
+  --flutter-bin PATH        Flutter executable (default flutter)
+  --flutter-engine-abis LIST Android ABIs: arm64 always, optionally arm,x64 (comma separated)
+                            Android downloads are cached; extraction requires unzip
   --native-libs DIR          Recursively upload unstripped Android *.so (alone or combined)
   --symbols-dir DIR          The --split-debug-info directory (iOS: with --dsym)
   --dsym DIR                 iOS: the build's App.framework.dSYM (not Runner.app.dSYM)
@@ -309,21 +314,26 @@ String machOUuid(Uint8List bytes) {
   return id;
 }
 
-Uint8List _artifactBytes(File file) {
+Uint8List _artifactBytes(File file, {bool native = false}) {
+  final maxMiB = native ? 256 : 100;
   if (!file.existsSync()) throw FormatException('missing ${file.path}');
-  if (file.lengthSync() == 0 || file.lengthSync() > 100 * 1024 * 1024) {
-    throw const FormatException(
-        'artifact must be non-empty and within the 100 MiB v1 limit');
+  if (file.lengthSync() == 0 || file.lengthSync() > maxMiB * 1024 * 1024) {
+    throw FormatException(
+        'artifact must be non-empty and within the $maxMiB MiB limit');
   }
   return file.readAsBytesSync();
 }
 
 Future<String> runUploadSymbols(List<String> args,
-    {Map<String, String>? environment}) async {
+    {Map<String, String>? environment,
+    FlutterRunner? flutterRunner,
+    Uri? engineStorageBase}) async {
   final env = environment ?? Platform.environment;
   final values = <String, String>{};
   final switches = <String>{};
   const options = {
+    'flutter-bin',
+    'flutter-engine-abis',
     'native-libs',
     'dsyms-dir',
     'android-mapping',
@@ -345,6 +355,15 @@ Future<String> runUploadSymbols(List<String> args,
   for (var i = 0; i < args.length; i++) {
     final arg = args[i];
     if (arg == '--help' || arg == '-h') return uploadSymbolsHelp;
+    if (arg == '--flutter-engine' || arg.startsWith('--flutter-engine=')) {
+      switches.add('flutter-engine');
+      if (arg.contains('=')) {
+        values['flutter-engine'] = arg.substring(arg.indexOf('=') + 1);
+      } else if (i + 1 < args.length && !args[i + 1].startsWith('--')) {
+        values['flutter-engine'] = args[++i];
+      }
+      continue;
+    }
     if (arg == '--dry-run') {
       switches.add(arg.substring(2));
       continue;
@@ -399,6 +418,34 @@ Future<String> runUploadSymbols(List<String> args,
   final nativeLibs = values['native-libs'];
   final dsymsDir = values['dsyms-dir'];
   final mappingId = values['mapping-id'];
+  final engine = switches.contains('flutter-engine');
+  final enginePlatform = values['flutter-engine'] ??
+      (dsym != null || dsymsDir != null ? 'ios' : 'android');
+  if (engine && !{'android', 'ios'}.contains(enginePlatform)) {
+    throw const FormatException('--flutter-engine expects android or ios');
+  }
+  if (engine &&
+      ((enginePlatform == 'android' && (dsym != null || dsymsDir != null)) ||
+          (enginePlatform == 'ios' &&
+              (nativeLibs != null || androidMapping != null)))) {
+    throw const FormatException(
+        '--flutter-engine platform conflicts with input options');
+  }
+  if (!engine &&
+      (values.containsKey('flutter-engine-abis') ||
+          values.containsKey('flutter-bin'))) {
+    throw const FormatException(
+        '--flutter-bin/--flutter-engine-abis require --flutter-engine');
+  }
+  final engineAbis = <String>{
+    'arm64',
+    ...?values['flutter-engine-abis']?.split(',')
+  };
+  if (engineAbis.any((abi) => !{'arm64', 'arm', 'x64'}.contains(abi)) ||
+      (enginePlatform == 'ios' && values.containsKey('flutter-engine-abis'))) {
+    throw const FormatException(
+        '--flutter-engine-abis expects arm64,arm,x64 on Android');
+  }
   if ((androidMapping == null) != (mappingId == null)) {
     throw const FormatException(
         '--android-mapping and --mapping-id are required together');
@@ -424,7 +471,8 @@ Future<String> runUploadSymbols(List<String> args,
       directory == null &&
       androidMapping == null &&
       nativeLibs == null &&
-      dsymsDir == null)
+      dsymsDir == null &&
+      !engine)
     throw const FormatException(
         'provide --symbols-dir (Android), --dsym (iOS), --native-libs, --dsyms-dir, or --android-mapping with --mapping-id');
   final files = <File>[];
@@ -492,9 +540,10 @@ Future<String> runUploadSymbols(List<String> args,
       ..sort((a, b) => a.path.compareTo(b.path));
     for (final bundle in bundles) {
       final name = bundle.uri.pathSegments.where((s) => s.isNotEmpty).last;
+      if (name == 'Flutter.framework.dSYM' && engine) continue;
       if (name == 'App.framework.dSYM' || name == 'Flutter.framework.dSYM') {
         skipped.add(
-            'skipped ${bundle.path}: ${name == 'App.framework.dSYM' ? 'Dart uses --dsym App.framework.dSYM' : 'Flutter engine symbols are Phase 5'}');
+            'skipped ${bundle.path}: ${name == 'App.framework.dSYM' ? 'Dart uses --dsym App.framework.dSYM' : 'Flutter engine requires --flutter-engine'}');
         continue;
       }
       final dwarf = Directory('${bundle.path}/Contents/Resources/DWARF');
@@ -520,7 +569,7 @@ Future<String> runUploadSymbols(List<String> args,
               ? nativeFiles.first
               : dsymFiles.isNotEmpty
                   ? dsymFiles.first
-                  : File(nativeLibs ?? dsymsDir!);
+                  : File(nativeLibs ?? dsymsDir ?? Directory.current.path);
   final dsn = option('dsn');
   final dryRun = switches.contains('dry-run');
   if (!dryRun && dsn == null)
@@ -594,15 +643,16 @@ Future<String> runUploadSymbols(List<String> args,
   final nativeIds = <String>{};
   for (final file in nativeFiles) {
     final name = file.uri.pathSegments.last;
+    if (name == 'libflutter.so' && engine) continue;
     if (name == 'libflutter.so' || name == 'libapp.so') {
       lines.add(
-          'skipped ${file.path}: ${name == 'libflutter.so' ? 'Flutter engine symbols are Phase 5' : 'Dart uses --symbols-dir'}');
+          'skipped ${file.path}: ${name == 'libflutter.so' ? 'Flutter engine requires --flutter-engine' : 'Dart uses --symbols-dir'}');
       continue;
     }
     final Uint8List bytes;
     final String code;
     try {
-      bytes = _artifactBytes(file);
+      bytes = _artifactBytes(file, native: true);
       code = elfBuildId(bytes);
       if (!elfHasSymbols(bytes)) {
         lines.add('skipped ${file.path}: stripped (no .symtab or .debug_info)');
@@ -628,7 +678,7 @@ Future<String> runUploadSymbols(List<String> args,
     final Uint8List bytes;
     final List<String> codes;
     try {
-      bytes = _artifactBytes(file);
+      bytes = _artifactBytes(file, native: true);
       codes = machOUuids(bytes);
     } on FormatException catch (error) {
       lines.add('skipped ${file.path}: ${error.message}');
@@ -646,6 +696,75 @@ Future<String> runUploadSymbols(List<String> args,
           : await uploadArtifact(target!, 'native_debug_file', id, release,
               bytes, timeout, interval);
       lines.add('native_debug_file artifact $artifact');
+    }
+  }
+  if (engine) {
+    final flutter = await FlutterEngine.discover(
+        values['flutter-bin'] ?? 'flutter',
+        flutterRunner ??
+            (executable, arguments) => Process.run(executable, arguments));
+    Future<void> uploadEngine(File file, String label, String format) async {
+      final bytes = _artifactBytes(file, native: true);
+      final codes = format == 'elf' ? [elfBuildId(bytes)] : machOUuids(bytes);
+      if (format == 'elf' && !elfHasSymbols(bytes)) {
+        throw FormatException('$label: libflutter.so is stripped');
+      }
+      // When a packaged engine was supplied, prove the download matches it.
+      if (format == 'elf') {
+        for (final local in nativeFiles
+            .where((f) => f.uri.pathSegments.last == 'libflutter.so')) {
+          final localBytes = _artifactBytes(local, native: true);
+          if (localBytes[4] == bytes[4] &&
+              localBytes[18] == bytes[18] &&
+              elfBuildId(localBytes) != codes.single) {
+            throw FormatException(
+                '$label: libflutter.so build-ID mismatch with ${local.path}');
+          }
+        }
+      }
+      for (final code in codes.toSet()) {
+        final id = nativeDebugId(code, format);
+        if (!nativeIds.add(id)) {
+          lines.add('skipped $label: duplicate debug id $id');
+        } else if (dryRun) {
+          lines.add('skipped $label: dry-run (debug id $id)');
+        } else if (await nativeArtifactReady(target!, id)) {
+          lines.add('already present $label: $id');
+        } else {
+          await uploadArtifact(target, 'native_debug_file', id, release!, bytes,
+              timeout, interval);
+          lines.add('uploaded $label: $id');
+        }
+      }
+    }
+
+    if (enginePlatform == 'ios') {
+      await uploadEngine(
+          flutter.iosDwarf(dsymsDir), 'Flutter.framework.dSYM', 'macho');
+    } else {
+      final cache = FlutterEngine.cacheDirectory(env);
+      for (final abi in engineAbis) {
+        final label = 'libflutter.so android-$abi (${flutter.revision})';
+        final cached = flutter.cachedZip(cache, abi);
+        if (dryRun && !cached.existsSync()) {
+          lines.add('skipped $label: dry-run, archive is not cached');
+          continue;
+        }
+        final zip = await flutter.androidZip(
+            cache,
+            abi,
+            engineStorageBase ??
+                Uri.parse(
+                    'https://storage.googleapis.com/flutter_infra_release/flutter/'));
+        final temporary =
+            Directory.systemTemp.createTempSync('wasmwatch-engine-');
+        try {
+          final file = await extractFlutterLibrary(zip, temporary);
+          await uploadEngine(file, label, 'elf');
+        } finally {
+          temporary.deleteSync(recursive: true);
+        }
+      }
     }
   }
   return lines.join('\n');

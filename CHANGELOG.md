@@ -1,3 +1,20 @@
+## 0.8.1
+
+Use with `wasmwatch_native` 0.3.0 (same repository and tag).
+
+- JS (dart2js) builds now send the build's debug ID. It was always the all-zero placeholder outside wasm, so JS source maps never matched. `upload_sourcemaps` already injects `window.__WASMWATCH_DEBUG_ID__` and registers the JS map under the same ID as the wasm map. Rebuild web apps with this version: builds made with an earlier SDK keep sending the placeholder.
+- Card-number scrubbing needs a valid Luhn checksum, so timestamps and order numbers of 13–19 digits are no longer replaced by `[credit-card]`. A number followed by a space also keeps that space.
+- The `flutter.error` breadcrumb names the error with the readable type (`StateError: …`), not the minified `runtimeType` (`minified:Class1168: …`) seen in release wasm builds.
+- A stalled connection no longer hangs the SDK: each request times out after 10 s (a failed attempt, retried and buffered as before), and `WasmWatch.init` waits at most 3 s for buffered events to replay, which carries on in the background.
+
+## 0.8.0
+
+Use with `wasmwatch_native` 0.3.0 (same repository and tag).
+
+- iOS app hangs are reported in the same session: with `wasmwatch_native`, a watchdog reports the main thread blocked for `appHangTimeout` (default 2 s; `Duration.zero` disables it). Because Flutter runs Dart on the iOS main thread, this covers native hangs and Dart code freezing the UI, with symbolicated Dart frames. A hang that ends with the app being killed is sent on the next launch as `App hang: at least N sec (app terminated)`. Verified on an iPhone.
+- Flutter engine frames can be symbolicated: `upload_symbols --flutter-engine [android|ios]` uploads the engine's debug symbols once per Flutter version per project (Android downloads them from Flutter's storage and needs `unzip`; iOS uses the local Flutter dSYM) and skips files the server already has.
+- iOS daily exit counts have now been verified with real MetricKit deliveries on an iPhone.
+
 ## 0.7.0
 
 Native crash capture with the optional `wasmwatch_native` 0.2.0 plugin (same repository, `path: wasmwatch_native`).

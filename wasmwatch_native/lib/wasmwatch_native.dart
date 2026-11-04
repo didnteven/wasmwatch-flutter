@@ -30,6 +30,7 @@ class WasmWatchNative {
     required String release,
     String? environment,
     required String installId,
+    Duration appHangTimeout = const Duration(seconds: 2),
   }) async {
     if (!_supported) return [];
     _registerNotifications();
@@ -37,6 +38,7 @@ class WasmWatchNative {
       'release': release,
       if (environment != null) 'environment': environment,
       'install_id': installId,
+      'app_hang_timeout_ms': appHangTimeout.inMilliseconds,
     });
     if (result is! List) return [];
     final reports = <Map<String, Object?>>[];
@@ -99,9 +101,13 @@ class WasmWatchNativeAndroid extends NativeCrashBridge {
   Future<List<Map<String, Object?>>> start(
           {required String release,
           String? environment,
-          required String installId}) =>
+          required String installId,
+          Duration appHangTimeout = const Duration(seconds: 2)}) =>
       WasmWatchNative.start(
-          release: release, environment: environment, installId: installId);
+          release: release,
+          environment: environment,
+          installId: installId,
+          appHangTimeout: appHangTimeout);
   @override
   Future<void> setScope(Map<String, Object?> scope) =>
       WasmWatchNative.setScope(scope);

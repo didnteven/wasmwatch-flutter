@@ -1,10 +1,10 @@
 # wasmwatch_native
 
-Optional Android and iOS crash capture for WasmWatch, version 0.2.0. Add the dependency
+Optional Android and iOS crash and hang capture for WasmWatch, version 0.3.0. Add the dependency
 alongside `wasmwatch` and call `WasmWatch.init` with a release and DSN as usual.
 Flutter automatically registers the native bridge; no application registration
 code is required. The SDK recovers reports on the next launch and sends them
-through its normal transport. Crashes/hangs become events; iOS exits become daily
+through its normal transport; iOS hangs are sent in the same session. Crashes/hangs become events; iOS exits become daily
 release-health counts. Reports retain the crashed build's identity.
 
 ```yaml
@@ -12,11 +12,11 @@ dependencies:
   wasmwatch:
     git:
       url: https://github.com/didnteven/wasmwatch-flutter.git
-      ref: v0.7.0
+      ref: v0.8.1
   wasmwatch_native:
     git:
       url: https://github.com/didnteven/wasmwatch-flutter.git
-      ref: v0.7.0
+      ref: v0.8.1
       path: wasmwatch_native
 ```
 
@@ -38,7 +38,9 @@ Use the same `ref` for both packages; the plugin depends on `wasmwatch` at that 
 
 In the WasmWatch source repository, `example/` is a crash harness for emulators and
 devices: buttons (and an optional polled command URL) trigger `throw`,
-`throw_background`, `abort`, `anr`, `hang` (iOS) and `handled_dart`.
+`throw_background`, `abort`, `anr`, `hang` (12 s native iOS),
+`hang_short` (1 s native iOS, below threshold), `dart_freeze` (5 s synchronous
+`dartBusyFreeze`) and `handled_dart`.
 
 Java/Kotlin uncaught exceptions are captured on every supported Android version,
 using Flutter's default minimum SDK (currently API 24). Android 11 / API 30 adds
@@ -212,7 +214,8 @@ minimum, with MetricKit diagnostics guarded by `#available(iOS 14.0, *)`.
 The default template does not generate a SwiftPM plugin. `ios/Package.swift`
 is a dependency-free macOS XCTest harness for the plain Swift core.
 
-One subscriber per process handles `MXCrashDiagnostic` and `MXHangDiagnostic`
+One subscriber per process handles `MXCrashDiagnostic` and, when the watchdog is
+disabled, `MXHangDiagnostic`
 from callbacks and `pastDiagnosticPayloads` at `start`. Reports arriving after
 `start` cause a main-thread `reportsAvailable` method-channel notification;
 the SDK re-reads pending reports and deduplicates delivery by report ID.
@@ -243,7 +246,7 @@ using the report's release, environment, install ID and UTC payload time window.
 `cumulative<Name>ExitCount` counters in foreground/background data become snake_case
 reasons; numeric strings and integral numbers are accepted, unknown fields are
 ignored, and zero counts are omitted. Empty/zero-only reports are acknowledged
-without sending. Exit counts never create events or change sessions (D8).
+without sending. Exit counts never create events or change sessions.
 
 The normal transport persists these envelopes offline and retries transient
 failures. The native report is acknowledged only after server acceptance or a
@@ -251,10 +254,10 @@ permanent 4xx other than 429; offline buffering alone does not acknowledge it.
 A later launch/notification can resend an unacknowledged report; the server
 replaces a resent report per install, so retries do not double count.
 
-The SDK's `test/fixtures/native/ios/exit-metrics.synthetic.json` is a
-**synthetic, unverified** fixture, not a device capture. Exit-count JSON and
-delivery remain unverified on a device (spike N6). KSCrash is the fallback if
-MetricKit delivery proves unreliable.
+Exit counts were verified on an iPhone (iOS 27.2) with Xcode's simulated MetricKit
+payloads and with a real payload, which iOS delivered about 22 hours after the day it
+covers ended. An exit report carries no app version, so it takes the identity of the
+build running when it is delivered.
 
 `start` persists identity in `identity.json`. `setScope` replaces the in-memory
 scope immediately and queues its persistence. `scopes.json` retains the latest
@@ -267,23 +270,73 @@ changes. A scope sent before `start` is bound to that start's identity.
 
 Crash events use `dart-ios`, signal names before Mach exception names, and the
 `ios_metrickit` mechanism. Metadata remains in `contexts.ios_crash`. Attributed
-stacks flatten root-first, depth-first: the real abort fixture starts at the
-kernel abort and ends at dyld (30 frames, 10 Mach-O images), matching the batch A
-contract example exactly. Unknown addresses/UUIDs do not invent evidence.
+stacks flatten root-first, depth-first: a real `abort()` stack starts at the kernel
+abort and ends at dyld. Unknown addresses/UUIDs do not invent evidence.
 A matching crash marks the deferred previous session `crashed`; iOS waits for
 late delivery up to the existing 30-second fallback. Hangs do not alter sessions.
 
-Hang conversion follows Apple's `MXHangDiagnostic.h` (`hangDuration`, a duration
-measurement, and `callStackTree`), tested with a synthetic diagnostic derived from
-the crash fixture. **Hang JSON/delivery remains unverified on a device**: the
-spike has not received a hang payload yet. The example permits local HTTP and
-requests local-network access for a local DSN and command polling.
+With the watchdog turned off, MetricKit hang diagnostics are converted instead
+(`hangDuration` and `callStackTree`, per Apple's `MXHangDiagnostic.h`). In device
+testing MetricKit delivered no real hang diagnostic, which is why the watchdog is the
+default. The example permits local HTTP and requests local-network access for a
+local DSN and command polling.
+
+### In-app hang watchdog
+
+The default iOS arm64 watchdog reports main-thread hangs lasting at least two
+seconds. Flutter 3.41 requires a merged platform/UI thread, so this covers native
+hangs and synchronous Dart freezes, including AOT frames in `App.framework`.
+Upload the App.framework dSYM and `.symbols` as for native crash stacks.
+
+Configure `WasmWatchOptions(appHangTimeout: const Duration(seconds: 2), ...)` in
+`WasmWatch.init(options: ...)`. `Duration.zero` disables the watchdog and restores
+MetricKit hang capture. The bridge and static `WasmWatchNative.start` accept the
+same `appHangTimeout`; native `start` receives `app_hang_timeout_ms` and defaults
+to 2000 ms for older SDKs. This setting does not change Android capture.
+
+A dedicated userInitiated thread checks a main-queue heartbeat every 100–250 ms.
+At the threshold it captures one stack, persists the report immediately, and
+refreshes the duration lower bound once a second. While that hang is in progress,
+`start` withholds it from Dart. Recovery atomically replaces the same report ID
+and emits `reportsAvailable`, sending the event in the same session. If the app is
+killed, the next process recovers it with `ended: false` and the message
+`App hang: at least 5.0 sec (app terminated)`. Completed hangs say, for example,
+`App hang: 2.4 sec`. Both use `AppHang`, `app_hang`, `handled: false`; sessions
+are unchanged. Native context includes `source: watchdog` or `metrickit`.
+
+Timing pauses when the app resigns active or enters the background and resets on
+activation, excluding suspension. Debuggers disable detection so breakpoints do
+not become hangs. Other CPU architectures disable it. Ten reports per process
+bound work; shorter hangs and Android non-fatal ANRs are outside this coverage.
+MetricKit crashes and exit counts retain their existing behavior.
+
+Capture uses only Swift Darwin/Mach APIs. It preallocates buffers, suspends the
+main thread, reads pc/lr and at most 128 frames with `vm_read_overwrite` within
+the main stack bounds, strips pointer authentication bits, and always resumes.
+There is no allocation, logging, locking or ObjC work while suspended. Image
+UUID/path lookup happens after resume. Reports reuse the existing builder,
+identity, scope and `app_binaries`, with MetricKit's innermost-first nested
+`callStackTree` and `hangDuration` string. Unfinished files are hidden only by the
+process that created them; finalized/delivered IDs cannot be re-added.
+
+Dart AOT frame records are only 8-byte aligned, so the walk accepts 8-byte-aligned
+frame pointers. The link register is kept as the second frame only when the top frame
+is a `libsystem_kernel` syscall leaf, and frames past the main thread's UIKit → `main`
+→ dyld base are dropped.
+
+Verified on an iPhone 15 Pro Max (iOS 27.2) with an obfuscated release build: a 12 s
+native hang and a 5 s Dart freeze were each reported about a second after they ended,
+with symbolicated stacks (the Dart freeze names the blocking Dart function and line);
+a 1 s hang was not reported; a hang interrupted by a kill was reported at the next
+launch. Not checked on a device: the pauses in the background and under a debugger
+(unit-tested).
 
 ## Offline development
 
 ```sh
 export FLUTTER_SUPPRESS_ANALYTICS=true
-export GRADLE_USER_HOME="/Volumes/250GB SAMSUNG 970 EVO PLUS /dev-tools/gradle"
+# Optional: point Gradle at a populated cache and Android Studio's JDK.
+# export GRADLE_USER_HOME=/path/to/gradle-cache
 export JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home"
 flutter pub get --offline
 flutter test --no-pub
@@ -298,9 +351,8 @@ cd android
 
 The example uses AGP 8.11.1, Kotlin 2.2.20 and Gradle 8.14. For
 `flutter build apk --release --no-pub`, ensure the wrapper passes `--offline` to
-Gradle as well (Flutter has no corresponding build flag). On the spike cache,
-add `--target-platform android-arm64`: the ARMv7 and x86_64 release engine artifacts
-are not cached; the ARM64 APK builds offline. The JVM suite includes
+Gradle as well (Flutter has no corresponding build flag). If only the ARM64 release
+engine artifacts are cached, add `--target-platform android-arm64`. The JVM suite includes
 the real ANR/tombstone fixtures, every tombstone truncation and seeded random
 byte flips. All test resources are inside this package.
 

@@ -140,6 +140,9 @@ final class IOSPendingStore {
   let pending: URL
   private let files = FileManager.default
   private var seen: [String]
+  // Only this process hides its unfinished hangs; a new store recovers them.
+  private var unfinished: Set<String> = []
+  private var delivered: Set<String> = []
 
   init(root: URL) throws {
     self.root = root
@@ -195,16 +198,37 @@ final class IOSPendingStore {
     return true
   }
 
+  // Replacement is allowed only for a hang created and withheld by this store.
+  // A seen/acknowledged or already delivered report can never be resurrected.
+  @discardableResult func putWatchdog(_ report: [String: Any], ended: Bool) throws -> Bool {
+    guard let id = report["id"] as? String, valid(id) else { throw NativeJSON.sizeError }
+    let url = pending.appendingPathComponent(id + ".json")
+    if unfinished.contains(id) {
+      guard !delivered.contains(id), files.fileExists(atPath: url.path) else { return false }
+      try atomic(IOSReportBuilder.bounded(report), to: url)
+    } else {
+      guard !seen.contains(id), !delivered.contains(id), !files.fileExists(atPath: url.path) else { return false }
+      // Hide before writing: even a journal-write failure after the atomic rename
+      // must not expose an unfinished report in this process.
+      if !ended { unfinished.insert(id) }
+      guard try put(report) else { return false }
+    }
+    if ended { unfinished.remove(id) } else { unfinished.insert(id) }
+    return true
+  }
+
   func reports(identity: [String: Any]) throws -> [String] {
     var result: [String] = []
     for url in try orderedFiles() {
       let data = try Data(contentsOf: url)
       guard var report = try? NativeJSON.object(data) else { continue }
+      guard let id = report["id"] as? String, !unfinished.contains(id) else { continue }
       if report["release"] == nil {
         report.merge(identity) { old, _ in old }
         try atomic(IOSReportBuilder.bounded(report), to: url)
       }
       result.append(String(decoding: try Data(contentsOf: url), as: UTF8.self))
+      delivered.insert(id)
     }
     return result
   }

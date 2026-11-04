@@ -81,7 +81,9 @@ ErrorEvent? eventFromNativeReport(Object? input,
         value(
             'AppHang',
             duration is String || duration is num
-                ? 'App hang: $duration'
+                ? (report['ended'] == false
+                    ? 'App hang: at least $duration (app terminated)'
+                    : 'App hang: $duration')
                 : 'App hang',
             frames,
             'app_hang');
@@ -299,6 +301,12 @@ ErrorEvent? eventFromNativeReport(Object? input,
             .take(50)),
       if (exit != null) 'app_exit': exit,
       if (ios && iosMetadata.isNotEmpty) kind: _iosContext(iosMetadata),
+      if (kind == 'ios_hang')
+        'ios_hang': {
+          ..._iosContext(iosMetadata),
+          'source': report['source'] == 'watchdog' ? 'watchdog' : 'metrickit',
+          if (report['ended'] is bool) 'ended': report['ended'],
+        },
     };
     // The mechanism contract permits only type/handled. Keep signal evidence in
     // app_exit without overwriting any OS exit fields.
@@ -356,7 +364,7 @@ ErrorEvent? eventFromNativeReport(Object? input,
   }
 }
 
-/// Synthetic MXAppExitMetric shape until spike N6 supplies a device fixture.
+/// MXAppExitMetric JSON: verified against Xcode-simulated and real device payloads.
 /// Unknown counters and malformed values are ignored; zero counts never travel.
 Map<String, Object?>? appExitsFromNativeReport(Map<String, Object?> report) {
   final diagnostic = _optional(() => _map(report['diagnostic'])) ?? {};

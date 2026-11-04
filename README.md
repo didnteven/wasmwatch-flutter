@@ -12,7 +12,7 @@ dependencies:
   wasmwatch:
     git:
       url: https://github.com/didnteven/wasmwatch-flutter.git
-      ref: v0.7.0
+      ref: v0.8.1
 ```
 
 Then run `flutter pub get`.
@@ -108,25 +108,28 @@ out.
 Add the optional `wasmwatch_native` plugin from this repository to capture
 Android Java/Kotlin and native crashes, killed ANRs and OS kills (Android 11+
 for exit records, 12+ for native stacks), and iOS 14+ MetricKit crashes, app
-hangs and daily exit counts. Reports are sent on the next launch.
+app hangs (reported in the same session, including Dart code freezing the UI) and
+daily exit counts. Crash reports are sent on the next launch.
 
 ```yaml
 dependencies:
   wasmwatch:
     git:
       url: https://github.com/didnteven/wasmwatch-flutter.git
-      ref: v0.7.0
+      ref: v0.8.1
   wasmwatch_native:
     git:
       url: https://github.com/didnteven/wasmwatch-flutter.git
-      ref: v0.7.0
+      ref: v0.8.1
       path: wasmwatch_native
 ```
 
 Flutter registers the plugin automatically. For readable native stacks, also
 upload the R8 mapping and native libraries (Android) or the archive's dSYMs
-(iOS) with `upload_symbols`; see `wasmwatch_native/README.md`. Flutter engine
-frames are not symbolicated yet.
+(iOS) with `upload_symbols`; see `wasmwatch_native/README.md`. For Flutter engine
+frames, run `upload_symbols --flutter-engine android` or `--flutter-engine ios` once
+per Flutter version. Set `appHangTimeout` in `WasmWatchOptions` to change the iOS
+hang threshold (default 2 s; `Duration.zero` turns hang detection off).
 
 ## Migrating an existing Flutter web app
 

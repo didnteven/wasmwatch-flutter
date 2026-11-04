@@ -26,11 +26,13 @@ class FakeBridge extends NativeCrashBridge {
   Future<List<Map<String, Object?>>> start(
       {required String release,
       String? environment,
-      required String installId}) async {
+      required String installId,
+      Duration appHangTimeout = const Duration(seconds: 2)}) async {
     starts.add({
       'release': release,
       'environment': environment,
-      'install_id': installId
+      'install_id': installId,
+      'app_hang_timeout_ms': appHangTimeout.inMilliseconds,
     });
     return onStart == null ? reports : onStart!();
   }
@@ -100,6 +102,34 @@ void main() {
             maxRetries: 0,
             client: MockClient(send ?? (_) async => http.Response('', 200))));
   }
+
+  test('iOS hang timeout survives option resolution and reaches bridge start',
+      () async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
+    for (final timeout in [
+      const Duration(seconds: 2),
+      const Duration(milliseconds: 4500),
+      Duration.zero
+    ]) {
+      final bridge = FakeBridge();
+      NativeCrashBridge.instance = bridge;
+      final config = WasmWatchOptions(
+        dsn: 'http://key@localhost/v1/1',
+        appHangTimeout: timeout,
+        trackSessions: false,
+        captureLifecycleBreadcrumbs: false,
+        autoInstallFlutterErrorHandlers: false,
+      ).resolved();
+      expect(config.appHangTimeout, timeout);
+      await WasmWatch.init(options: config);
+      expect(
+          bridge.starts.single['app_hang_timeout_ms'], timeout.inMilliseconds);
+      await WasmWatch.close();
+    }
+    expect(
+        const WasmWatchOptions(dsn: 'http://key@localhost/v1/1').appHangTimeout,
+        const Duration(seconds: 2));
+  });
 
   test(
       'Android bridge shares persistent install ID and uses the new session scope',

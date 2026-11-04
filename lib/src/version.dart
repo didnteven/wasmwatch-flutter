@@ -1,1 +1,1 @@
-const wasmwatchSdkVersion = '0.7.0';
+const wasmwatchSdkVersion = '0.8.1';

@@ -1,6 +1,6 @@
 name: wasmwatch_native
 description: Optional Android and iOS crash, hang and process exit capture for WasmWatch.
-version: 0.2.0
+version: 0.3.0
 publish_to: none # Installed from git; not on pub.dev yet.
 environment:
   sdk: '>=3.4.0 <4.0.0'
@@ -12,7 +12,7 @@ dependencies:
   wasmwatch:
     git:
       url: https://github.com/didnteven/wasmwatch-flutter.git
-      ref: v0.7.0
+      ref: v0.8.1
 dev_dependencies:
   flutter_test:
     sdk: flutter

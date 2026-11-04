@@ -194,8 +194,16 @@ class WasmWatch {
               activeClient.suppressInternalError(error, stack));
       recover();
     }
-    await activeClient.flushOffline();
+    // Replaying buffered events must not hold up app startup on a slow network:
+    // wait briefly, and let the replay finish in the background.
+    await activeClient
+        .flushOffline()
+        .timeout(startupFlushBudget, onTimeout: () {});
   }
+
+  /// How long [init] waits for buffered events to replay before returning.
+  @visibleForTesting
+  static Duration startupFlushBudget = const Duration(seconds: 3);
 
   static Future<void> _startNative(WasmWatchClient client,
       NativeCrashBridge bridge, String installId) async {
@@ -207,7 +215,8 @@ class WasmWatch {
               ? client.options.release!
               : 'unknown',
           environment: client.options.environment,
-          installId: installId);
+          installId: installId,
+          appHangTimeout: client.options.appHangTimeout);
       // Closing or reinitializing leaves reports pending for the next start.
       if (!identical(_hub, hub)) return;
       await tracker?.completeNativeReports(

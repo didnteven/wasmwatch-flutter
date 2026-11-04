@@ -1,0 +1,52 @@
+{
+  "v": 1,
+  "id": "ios-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "kind": "ios_hang",
+  "source": "watchdog",
+  "ended": false,
+  "received_ms": 1792883204000,
+  "payload_begin": 1792883201600,
+  "payload_end": 1792883206600,
+  "release": "watchdog-build",
+  "install_id": "install",
+  "environment": "test",
+  "app_binaries": {
+    "App": "/Runner.app/Frameworks/App.framework/App",
+    "Runner": "/Runner.app/Runner"
+  },
+  "scope": {
+    "session_id": "same-session"
+  },
+  "diagnostic": {
+    "hangDuration": "5.0 sec",
+    "diagnosticMetaData": {
+      "pid": 7,
+      "watchdogHangID": "fixture"
+    },
+    "callStackTree": {
+      "callStacks": [
+        {
+          "threadAttributed": true,
+          "callStackRootFrames": [
+            {
+              "binaryName": "App",
+              "binaryUUID": "de4e052b-925d-3077-b5a7-b90c1a2d4b84",
+              "address": 8208,
+              "offsetIntoBinaryTextSegment": 16,
+              "sampleCount": 1,
+              "subFrames": [
+                {
+                  "binaryName": "Runner",
+                  "binaryUUID": "7a927bc7-d15d-3872-8276-3f57b0c6b730",
+                  "address": 4112,
+                  "offsetIntoBinaryTextSegment": 16,
+                  "sampleCount": 1
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

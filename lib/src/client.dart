@@ -56,7 +56,7 @@ class WasmWatchClient {
     if (kIsWeb ||
         (defaultTargetPlatform != TargetPlatform.android &&
             defaultTargetPlatform != TargetPlatform.iOS)) return;
-    // Android's build_id is the ELF build ID, iOS's the App.framework Mach-O UUID (mobile spike Q2).
+    // Android's build_id is the ELF build ID, iOS's the App.framework Mach-O UUID.
     _aotHeader = DartStackTraceParser.parseAotHeader(
         (stackTrace ?? StackTrace.current).toString());
   }

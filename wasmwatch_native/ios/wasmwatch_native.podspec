@@ -4,7 +4,7 @@
 #
 Pod::Spec.new do |s|
   s.name             = 'wasmwatch_native'
-  s.version          = '0.2.0'
+  s.version          = '0.3.0'
   s.summary          = 'WasmWatch MetricKit crash and hang capture.'
   s.description      = <<-DESC
 WasmWatch MetricKit crash and hang capture.

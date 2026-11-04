@@ -99,18 +99,26 @@ FormatException _apiError(http.Response response) {
       return UploadApiRejected(
           'API request failed with HTTP $status ($code)', status, code);
   }
-  return UploadApiRejected('API request failed with HTTP $status', status, null);
+  return UploadApiRejected(
+      'API request failed with HTTP $status', status, null);
 }
 
-Future<String> uploadArtifact(UploadTarget target, String artifactType, String id,
-    String release, List<int> bytes, int timeout, int interval) async {
+Future<String> uploadArtifact(
+    UploadTarget target,
+    String artifactType,
+    String id,
+    String release,
+    List<int> bytes,
+    int timeout,
+    int interval) async {
   final base = target.base;
   final key = target.key;
   Uri endpoint(String suffix) =>
       base.resolve('/api/v1/projects/${target.project}/$suffix');
-  if (bytes.isEmpty || bytes.length > 100 * 1024 * 1024)
-    throw const FormatException(
-        'artifact must be non-empty and within the 100 MiB v1 limit');
+  final maxMiB = artifactType == 'native_debug_file' ? 256 : 100;
+  if (bytes.isEmpty || bytes.length > maxMiB * 1024 * 1024)
+    throw FormatException(
+        'artifact must be non-empty and within the $maxMiB MiB limit');
   final digest = sha256.convert(bytes);
   final checksum = digest.toString();
   final client = http.Client();
@@ -190,13 +198,17 @@ Future<String> uploadArtifact(UploadTarget target, String artifactType, String i
       throw const FormatException('presigned upload URL is invalid');
     http.Response put;
     try {
-      final req = http.Request('PUT', url)..followRedirects = false;
-      req.bodyBytes = bytes;
+      final req = http.StreamedRequest('PUT', url)
+        ..followRedirects = false
+        ..contentLength = bytes.length;
       req.headers.addAll({
         'Content-Length': '${bytes.length}',
         'x-amz-checksum-sha256': base64Encode(digest.bytes)
       });
-      put = await http.Response.fromStream(await client.send(req));
+      final response = client.send(req);
+      req.sink.add(bytes);
+      await req.sink.close();
+      put = await http.Response.fromStream(await response);
     } catch (_) {
       throw const FormatException(
           'HTTP request failed; presigned upload was not retried because its outcome is uncertain');
@@ -250,6 +262,30 @@ Future<String> uploadArtifact(UploadTarget target, String artifactType, String i
               ? 2000
               : delay.inMilliseconds * 2);
     }
+  } finally {
+    client.close();
+  }
+}
+
+/// Same project and upload scope as create/complete; only ready native artifacts count.
+Future<bool> nativeArtifactReady(UploadTarget target, String id) async {
+  final client = http.Client();
+  try {
+    final req = http.Request(
+        'GET',
+        target.base.resolve(
+            '/api/v1/projects/${target.project}/artifacts/native/$id/status'))
+      ..followRedirects = false;
+    req.headers['Authorization'] = 'Bearer ${target.key}';
+    final response = await http.Response.fromStream(await client.send(req));
+    if (response.headers.containsKey('x-wasmwatch-deprecation'))
+      target.warnDeprecated();
+    if (response.statusCode != 200) throw _apiError(response);
+    final body = jsonDecode(response.body);
+    if (body is! Map || !{'ready', 'missing'}.contains(body['status'])) {
+      throw const FormatException('invalid native artifact lookup response');
+    }
+    return body['status'] == 'ready';
   } finally {
     client.close();
   }

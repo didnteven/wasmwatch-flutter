@@ -1,3 +1,8 @@
+## 0.3.0
+
+- iOS main-thread hang watchdog (arm64): reports hangs of at least `appHangTimeout` (default 2 s) in the same session, including Dart freezes, with the blocked thread's stack. Paused in the background and while a debugger is attached. A hang that ends in a kill is sent on the next launch. MetricKit hang diagnostics are used only when the watchdog is turned off.
+- Verified on an iPhone (iOS 27.2): native hangs, Dart freezes (symbolicated Dart frames), sub-threshold hangs not reported, and kill recovery; real MetricKit exit counts.
+
 ## 0.2.0
 
 - iOS 14+ MetricKit crash and hang diagnostics, pending report store and late-delivery notifications. No permission prompt or signal handlers.

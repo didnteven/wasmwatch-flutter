@@ -37,6 +37,13 @@ private final class MetricCapture: NSObject, MXMetricManagerSubscriber {
   private var identity: [String: Any]?
   private var binaries: [String: String] = [:]
   private var started = false
+  private var watchdogEnabled = false // disk queue; controls MetricKit filtering
+  private var hangReport: [String: Any]?
+  private var lastHangWrite: Double = 0
+  private let hangImages = HangImages()
+  #if arch(arm64)
+  private var watchdog: IOSHangWatchdog? // main thread, retained for the process
+  #endif
 
   func attach(_ channel: FlutterMethodChannel) {
     channels.append(channel)
@@ -73,10 +80,13 @@ private final class MetricCapture: NSObject, MXMetricManagerSubscriber {
         let next = try NativeJSON.boundedObject(String(decoding: NativeJSON.encode(
             input.filter { ["release", "environment", "install_id"].contains($0.key) }), as: UTF8.self))
         let scope = currentScope
+        let timeout = max(0, (input["app_hang_timeout_ms"] as? NSNumber)?.doubleValue ?? 2000) / 1000
+        let enabled = configureWatchdog(timeout: timeout)
         work(result) {
           let store = try self.prepare()
           try store.saveState(next, name: "identity.json")
           self.identity = next
+          self.watchdogEnabled = enabled
           // Dart may send its first scope before start. Bind it to this start's
           // identity, never the identity of the preceding process.
           if let scope = scope { try self.saveScope(scope, store: store) }
@@ -100,6 +110,57 @@ private final class MetricCapture: NSObject, MXMetricManagerSubscriber {
       default: result(FlutterMethodNotImplemented)
       }
     } catch { result(platformError(error)) }
+  }
+
+  private func configureWatchdog(timeout: Double) -> Bool {
+    #if arch(arm64)
+    if let watchdog = watchdog {
+      watchdog.configure(timeout: timeout)
+      return timeout > 0 && !IOSHangWatchdog.debuggerAttached
+    }
+    guard timeout > 0, !IOSHangWatchdog.debuggerAttached else { return false }
+    watchdog = IOSHangWatchdog(timeout: timeout) { event, addresses in
+      self.queue.async {
+        do { try self.saveHang(event, addresses: addresses) }
+        catch { NSLog("WasmWatch hang watchdog: %@", error.localizedDescription) }
+      }
+    }
+    return watchdog != nil
+    #else
+    return false
+    #endif
+  }
+
+  private func saveHang(_ event: HangTiming.Event, addresses: [UInt64]) throws {
+    let store = try prepare()
+    switch event {
+    case .began(let seconds):
+      let end = milliseconds(Date())
+      let diagnostic = IOSHangReport.diagnostic(
+          addresses: IOSHangReport.frames(addresses, images: hangImages), images: hangImages,
+          seconds: seconds, pid: Int(getpid()), captureID: UUID().uuidString)
+      let report = try IOSReportBuilder.build(kind: "ios_hang", diagnostic: diagnostic,
+          begin: end - Int64(seconds * 1000), end: end, binaries: binaries,
+          ring: ring, identity: identity, received: end)
+      let pending = IOSHangReport.updating(report, seconds: seconds, ended: false, end: end)
+      if try store.putWatchdog(pending, ended: false) { hangReport = pending }
+      lastHangWrite = seconds
+    case .ongoing(let seconds):
+      // Refresh the lower bound once a second without taking another stack.
+      guard seconds - lastHangWrite >= 1, let report = hangReport else { return }
+      let begin = report["payload_begin"] as? Int64 ?? 0
+      let pending = IOSHangReport.updating(report, seconds: seconds, ended: false,
+          end: begin + Int64(seconds * 1000))
+      try store.putWatchdog(pending, ended: false)
+      lastHangWrite = seconds
+    case .ended(let seconds):
+      guard let report = hangReport else { return }
+      let begin = report["payload_begin"] as? Int64 ?? 0
+      let finished = IOSHangReport.updating(report, seconds: seconds, ended: true,
+          end: begin + Int64(seconds * 1000))
+      if try store.putWatchdog(finished, ended: true) { notify() }
+      hangReport = nil
+    }
   }
 
   private func saveScope(_ scope: [String: Any], store: IOSPendingStore) throws {
@@ -142,7 +203,7 @@ private final class MetricCapture: NSObject, MXMetricManagerSubscriber {
         added = try save(diagnostic.jsonRepresentation(), kind: "ios_crash",
             begin: payload.timeStampBegin, end: payload.timeStampEnd, store: store) || added
       }
-      for diagnostic in payload.hangDiagnostics ?? [] {
+      for diagnostic in payload.hangDiagnostics ?? [] where IOSHangReport.acceptsMetricHang(watchdogEnabled: watchdogEnabled) {
         added = try save(diagnostic.jsonRepresentation(), kind: "ios_hang",
             begin: payload.timeStampBegin, end: payload.timeStampEnd, store: store) || added
       }

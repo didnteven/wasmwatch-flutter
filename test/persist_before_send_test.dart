@@ -34,6 +34,30 @@ void main() {
     expect(delivered, hasLength(1));
   });
 
+  test('init does not wait for a stalled offline replay', () async {
+    final storage = MemoryStorage();
+    final started = Completer<String>();
+    final first = client(storage, (request) {
+      started.complete(request.body);
+      return Completer<http.Response>().future;
+    });
+    unawaited(first.captureException(StateError('interrupted')));
+    await started.future;
+
+    var replayCalls = 0;
+    final restarted = client(storage, (request) {
+      replayCalls++;
+      return Completer<http.Response>().future; // the network is stalled
+    });
+    final previous = WasmWatch.startupFlushBudget;
+    WasmWatch.startupFlushBudget = const Duration(milliseconds: 100);
+    addTearDown(() => WasmWatch.startupFlushBudget = previous);
+    addTearDown(WasmWatch.close);
+    await WasmWatch.init(options: options, client: restarted)
+        .timeout(const Duration(seconds: 5));
+    expect(replayCalls, 1); // it did start replaying; it just did not wait
+  });
+
   test('interrupted live send survives and is delivered once at the next init',
       () async {
     final storage = MemoryStorage();

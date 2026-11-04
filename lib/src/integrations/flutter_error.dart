@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 import '../client.dart';
 import '../event/breadcrumb.dart';
+import '../utils/exception_type.dart';
 
 /// Chains framework and dispatcher handlers. Capture is intentionally detached:
 /// Flutter's synchronous error contract must retain the previous handler's
@@ -107,7 +108,7 @@ class FlutterErrorIntegration {
       } catch (_) {
         firstLine = '';
       }
-      final message = '${captured.runtimeType}: $firstLine';
+      final message = '${describeExceptionType(captured)}: $firstLine';
       client.hub?.scope.addBreadcrumb(
         Breadcrumb(
           category: 'flutter.error',

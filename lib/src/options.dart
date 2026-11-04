@@ -16,6 +16,7 @@ class WasmWatchOptions {
     this.captureNavigationBreadcrumbs = true,
     this.debug = false,
     this.sendDefaultContext = true,
+    this.appHangTimeout = const Duration(seconds: 2),
     bool? trackSessions,
     this.maxBreadcrumbs = 50,
     this.sampleRate = 1,
@@ -42,12 +43,20 @@ class WasmWatchOptions {
   final bool capturePrintBreadcrumbs;
   final bool captureNavigationBreadcrumbs;
   final bool debug;
+
   /// Collect browser/device context without persistent identifiers.
   final bool sendDefaultContext;
 
+  /// iOS main-thread hang threshold with wasmwatch_native (default 2 seconds).
+  /// Duration.zero disables the watchdog and leaves MetricKit hang capture on.
+  /// Paused in the background and while a debugger is attached; arm64 only.
+  final Duration appHangTimeout;
+
   final bool? _trackSessions;
+
   /// Track release-health sessions by default on iOS and Android only.
-  bool get trackSessions => _trackSessions ??
+  bool get trackSessions =>
+      _trackSessions ??
       (!kIsWeb &&
           (defaultTargetPlatform == TargetPlatform.iOS ||
               defaultTargetPlatform == TargetPlatform.android));
@@ -79,6 +88,7 @@ class WasmWatchOptions {
       captureNavigationBreadcrumbs: captureNavigationBreadcrumbs,
       debug: debug,
       sendDefaultContext: sendDefaultContext,
+      appHangTimeout: appHangTimeout,
       trackSessions: _trackSessions,
       maxBreadcrumbs: maxBreadcrumbs,
       sampleRate: sampleRate,
