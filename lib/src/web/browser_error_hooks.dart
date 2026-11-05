@@ -93,6 +93,24 @@ class BrowserErrorHooks {
               client.suppressInternalError(error, stack));
       return;
     }
+    final dartError = unwrapDart2jsException(reason);
+    if (dartError != null) {
+      final client = _client!;
+      final jsStack =
+          reason!.isA<_JSError>() ? (reason as _JSError).stack?.toDart : null;
+      client
+          .captureException(dartError,
+              stackTrace: StackTrace.fromString(
+                  jsStack ?? _locationStack(filename, line, column)),
+              browserCapture: true,
+              mechanism: {'type': mechanism, 'handled': false},
+              tags: {'wasmwatch.unwrapped': 'true'},
+              contexts: _errorLocation(filename, line, column))
+          .then<void>((_) {},
+              onError: (Object error, StackTrace stack) =>
+                  client.suppressInternalError(error, stack));
+      return;
+    }
     final opaqueWasm = isWasmException(reason);
     if (opaqueWasm &&
         !hasWasmRethrowHelper &&
@@ -127,9 +145,7 @@ class BrowserErrorHooks {
     final overflow = name == 'RangeError' &&
         message.contains('Maximum call stack size exceeded');
     // Empty evidence is preferable to a stack pointing at this listener.
-    stack ??= filename != null && filename.isNotEmpty
-        ? '    at $filename:${line ?? 0}:${column ?? 0}'
-        : '';
+    stack ??= _locationStack(filename, line, column);
     final client = _client!;
     client
         .captureException(
@@ -156,18 +172,32 @@ class BrowserErrorHooks {
       contexts: {
         if (opaqueWasm)
           'route': {'path': templatePath(web.window.location.pathname)},
-        if (filename != null)
-          'browser': {
-            'filename': filename,
-            'lineno': line,
-            'colno': column,
-          },
+        ..._errorLocation(filename, line, column),
       },
     )
         .then<void>((_) {}, onError: (Object error, StackTrace stack) {
       client.suppressInternalError(error, stack);
     });
   }
+
+  String _locationStack(String? filename, int? line, int? column) =>
+      filename != null && filename.isNotEmpty
+          ? '    at $filename:${line ?? 0}:${column ?? 0}'
+          : '';
+
+  /// Where the browser saw the error. Not under `browser`: that key holds the
+  /// browser name and version, and contexts merge one key deep.
+  Map<String, Object?> _errorLocation(
+          String? filename, int? line, int? column) =>
+      filename == null
+          ? const {}
+          : {
+              'error_location': {
+                'filename': filename,
+                'lineno': line,
+                'colno': column,
+              },
+            };
 
   String _safeString(JSAny? reason) {
     try {

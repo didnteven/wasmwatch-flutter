@@ -1,4 +1,5 @@
 import 'dart:js_interop';
+import 'dart:js_interop_unsafe';
 import 'package:flutter/foundation.dart';
 
 @JS('WebAssembly.Exception')
@@ -40,6 +41,24 @@ bool isWasmException(JSAny? value) =>
     return (error, stack);
   }
   return null;
+}
+
+/// dart2js throws a Dart error as a JS `Error` whose `dartException` property
+/// holds the original object (its `name` is empty). Null for anything else.
+Object? unwrapDart2jsException(JSAny? value) {
+  if (kIsWasm || value == null || !value.isA<JSObject>()) return null;
+  try {
+    final object = value as JSObject;
+    if (!object.has('dartException')) return null;
+    final carried = object['dartException'];
+    // dart2js stores the Dart object itself; other runtimes may box it.
+    if (carried.isA<JSBoxedDartObject>()) {
+      return (carried as JSBoxedDartObject).toDart;
+    }
+    return carried.dartify();
+  } catch (_) {
+    return null;
+  }
 }
 
 String? wasmExceptionStack(JSAny? value) {

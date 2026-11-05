@@ -12,7 +12,7 @@ dependencies:
   wasmwatch:
     git:
       url: https://github.com/didnteven/wasmwatch-flutter.git
-      ref: v0.8.1
+      ref: v0.8.2
 ```
 
 Then run `flutter pub get`.
@@ -116,11 +116,11 @@ dependencies:
   wasmwatch:
     git:
       url: https://github.com/didnteven/wasmwatch-flutter.git
-      ref: v0.8.1
+      ref: v0.8.2
   wasmwatch_native:
     git:
       url: https://github.com/didnteven/wasmwatch-flutter.git
-      ref: v0.8.1
+      ref: v0.8.2
       path: wasmwatch_native
 ```
 

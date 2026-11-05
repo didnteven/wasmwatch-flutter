@@ -1,3 +1,13 @@
+## 0.8.2
+
+Use with `wasmwatch_native` 0.3.0 (same repository and tag).
+
+- Uncaught errors in dart2js builds report their Dart type (`StateError`, …) instead of an empty one: the browser hook unwraps the Dart error dart2js carries on the JS error, as it already did on wasm.
+- Uncaught browser errors keep the browser name and version. The script location moved from the `browser` context to `error_location`, so the `browser` tag and the dashboard's browser name no longer disappear.
+- Custom exceptions keep their name in release builds when their `toString()` starts with it (`DioException`, `ClientException`, …) instead of showing as `Exception`.
+- HTTP failure breadcrumbs and messages use the readable error type, not the minified `runtimeType` (`minified:aU`).
+- Card-number scrubbing also requires a card-network prefix and length. Luhn alone still passed about 1 in 10 random 13–19 digit numbers (timestamps included), so the 0.8.1 note that they were "no longer replaced" overstated it; timestamps are now left alone.
+
 ## 0.8.1
 
 Use with `wasmwatch_native` 0.3.0 (same repository and tag).

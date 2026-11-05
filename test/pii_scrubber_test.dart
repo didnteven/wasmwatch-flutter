@@ -4,8 +4,11 @@ import 'package:wasmwatch/wasmwatch.dart';
 void main() {
   test('scrubs strings and recursively filters sensitive keys', () {
     final value = PiiScrubber.scrub({
-      'message': 'jane@example.com paid 4111-1111-1111-1111 with SSN 123-45-6789',
-      'nested': [{'Authorization': 'Bearer secret'}],
+      'message':
+          'jane@example.com paid 4111-1111-1111-1111 with SSN 123-45-6789',
+      'nested': [
+        {'Authorization': 'Bearer secret'}
+      ],
     }) as Map<String, Object?>;
     expect(value.toString(), isNot(contains('jane@example.com')));
     expect(value.toString(), isNot(contains('4111-1111-1111-1111')));
@@ -33,6 +36,9 @@ void main() {
       '1730000000000000', // a microsecond timestamp
       '4111111111111112', // one digit off a valid card
       '12345678901234567890', // 20 digits is not a card
+      '1730000000001', // a millisecond timestamp that passes Luhn
+      '1730000000000005', // a microsecond timestamp that passes Luhn
+      '9999999999999995', // passes Luhn, 9 is no network
     ]) {
       test('keeps $other', () {
         expect(PiiScrubber.scrubString('order $other shipped'),

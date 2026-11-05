@@ -4,6 +4,7 @@ import 'package:http/http.dart' as http;
 
 import '../event/breadcrumb.dart';
 import '../grouping/normalize.dart';
+import '../utils/exception_type.dart';
 import '../wasmwatch.dart';
 
 /// Error raised for an HTTP failure that is reported as an event.
@@ -137,14 +138,14 @@ class HttpErrorTracker {
       data: {
         'method': method,
         'url': url,
-        'error': error.runtimeType.toString(),
+        'error': describeExceptionType(error),
         if (duration != null) 'duration_ms': duration.inMilliseconds,
       },
     ));
     if (captureTransportErrors) {
       await _capture(
         HttpRequestException(method, url,
-            cause: error.runtimeType,
+            cause: describeExceptionType(error),
             normalizeHttpPath: WasmWatch.isInitialized
                 ? WasmWatch.hub.client.options.normalizeHttpPath
                 : null),

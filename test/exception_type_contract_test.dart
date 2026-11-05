@@ -44,4 +44,44 @@ void main() {
     expect(describeExceptionType(_CustomError()),
         anyOf('_CustomError', 'Exception'));
   });
+
+  group('a minified runtime name falls back to the name the exception prints',
+      () {
+    const minified = 'minified:aU';
+
+    test('DioException-style toString', () {
+      expect(
+          describeExceptionType(_Printing('DioException [bad response]: 404'),
+              runtimeTypeName: minified),
+          'DioException');
+    });
+
+    test('ClientException-style toString', () {
+      expect(
+          describeExceptionType(_Printing('ClientException: failed, uri=x'),
+              runtimeTypeName: minified),
+          'ClientException');
+    });
+
+    test('a bare Exception or Error prefix keeps the generic name', () {
+      expect(
+          describeExceptionType(_Printing('Exception: PaymentError happened'),
+              runtimeTypeName: minified),
+          'Exception');
+    });
+
+    test('a toString that is just a message keeps the generic name', () {
+      expect(
+          describeExceptionType(_Printing('something went wrong'),
+              runtimeTypeName: minified),
+          'Exception');
+    });
+  });
+}
+
+class _Printing implements Exception {
+  _Printing(this.text);
+  final String text;
+  @override
+  String toString() => text;
 }

@@ -20,9 +20,15 @@ const _knownNames = <String, String>{
 
 final _leadingIdentifier = RegExp(r'^([A-Za-z_][A-Za-z0-9_]*)');
 
+/// A type-like name other than the bare `Exception`/`Error`.
+final _namedType = RegExp(r'^[A-Z][A-Za-z0-9]*(?:Exception|Error)$');
+
 /// Returns a stable, readable name for [error], including in dart2wasm
 /// release builds where `runtimeType.toString()` is minified.
-String describeExceptionType(Object error) {
+///
+/// [runtimeTypeName] stands in for `runtimeType.toString()` in tests, which
+/// cannot produce a minified name on the VM.
+String describeExceptionType(Object error, {String? runtimeTypeName}) {
   String text;
   try {
     text = error.toString();
@@ -35,7 +41,7 @@ String describeExceptionType(Object error) {
 
   // FlutterError implements AssertionError, but keeping its concrete debug
   // name makes framework diagnostics such as RenderFlex overflow readable.
-  final runtime = error.runtimeType.toString();
+  final runtime = runtimeTypeName ?? error.runtimeType.toString();
   if (runtime == 'FlutterError') return runtime;
 
   if (error is RangeError) return 'RangeError';
@@ -54,6 +60,9 @@ String describeExceptionType(Object error) {
   if (error is OutOfMemoryError) return 'OutOfMemoryError';
 
   if (runtime.isNotEmpty && !runtime.startsWith('minified:')) return runtime;
+  // Minified class name: many exceptions still print their own name, e.g.
+  // `DioException [bad response]: ...` or `ClientException: ...`.
+  if (leading != null && _namedType.hasMatch(leading)) return leading;
   if (error is Error) return 'Error';
   if (error is Exception) return 'Exception';
   return 'Object';

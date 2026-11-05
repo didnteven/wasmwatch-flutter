@@ -103,6 +103,15 @@ void main() {
       expect(crumbs.single.level, SeverityLevel.warning);
     });
 
+    test('failure breadcrumb names the error with the readable type', () async {
+      // IndexError's runtimeType differs from the readable name RangeError.
+      await tracker.recordFailure('GET', Uri.parse('https://api.zeil.com/x'),
+          IndexError.withLength(5, 2), StackTrace.current);
+      expect(crumbs.single.data['error'], 'RangeError');
+      expect((captured.single as HttpRequestException).toString(),
+          contains('(RangeError)'));
+    });
+
     test('transport failure captures and rethrows', () async {
       await expectLater(
         call(MockClient((_) async => throw http.ClientException('down'))),

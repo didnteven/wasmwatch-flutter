@@ -2,6 +2,7 @@
 library;
 
 import 'dart:js_interop';
+import 'dart:js_interop_unsafe';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter/foundation.dart';
 import 'package:web/web.dart' as web;
@@ -208,8 +209,10 @@ void main() {
     expect(event.defaultPrevented, isFalse);
     expect(events, hasLength(1));
     expect(events.single.exceptionValue, 'boom');
-    expect(events.single.contexts['browser'],
+    expect(events.single.contexts['error_location'],
         {'filename': 'main.dart.js', 'lineno': 12, 'colno': 34});
+    // `browser` keeps the browser name and version.
+    expect((events.single.contexts['browser'] as Map)['name'], isNotNull);
     expect(
         events.single.mechanism, {'type': 'window.onerror', 'handled': false});
     final json = events.single.toJson(scrubPii: false);
@@ -253,6 +256,27 @@ void main() {
     expect(events.single.frames, hasLength(1));
     expect(events.single.frames.single.functionIndex, 42);
     expect(events.single.mechanism!['type'], 'unhandledrejection');
+  });
+
+  test(
+      'dart2js: an uncaught JS error with a dartException is captured as the Dart error',
+      () {
+    // dart2js throws a JS Error with an empty name that carries the Dart object.
+    final error = NativeError('')
+      ..stack = 'Error\n    at foo (main.dart.js:1:2)';
+    (error as JSObject)
+      ..['name'] = ''.toJS
+      ..['dartException'] = StateError('no element').toJSBox;
+    dispatchError('Uncaught Error', error: error);
+    expect(events, hasLength(1));
+    expect(events.single.exceptionType, 'StateError');
+    expect(events.single.exceptionValue, contains('no element'));
+    expect(events.single.tags['wasmwatch.unwrapped'], 'true');
+    expect(
+        events.single.mechanism, {'type': 'window.onerror', 'handled': false});
+    expect(events.single.frames.single.line, 1);
+    expect(events.single.contexts['error_location'],
+        {'filename': 'main.dart.js', 'lineno': 12, 'colno': 34});
   });
 
   test('stringifies primitive and null rejections', () {

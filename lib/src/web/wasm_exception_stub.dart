@@ -2,3 +2,4 @@
 bool isWasmException(Object? value) => false;
 bool get hasWasmRethrowHelper => false;
 String? wasmExceptionStack(Object? value) => null;
+Object? unwrapDart2jsException(Object? value) => null;
