@@ -5,6 +5,7 @@ import 'package:http/http.dart' as http;
 import '../event/breadcrumb.dart';
 import '../grouping/normalize.dart';
 import '../utils/exception_type.dart';
+import 'failed_request.dart';
 import '../wasmwatch.dart';
 
 /// Error raised for an HTTP failure that is reported as an event.
@@ -55,12 +56,15 @@ class HttpErrorTracker {
   final void Function(Breadcrumb)? addBreadcrumb;
   final Future<void> Function(Object error, StackTrace? stackTrace)? capture;
 
-  static String sanitizeUrl(Uri uri) => Uri(
-        scheme: uri.scheme,
-        host: uri.host,
-        port: uri.hasPort ? uri.port : null,
-        path: uri.path,
-      ).toString();
+  static String sanitizeUrl(Uri uri) => !uri.hasScheme && uri.host.isEmpty
+      // A relative request (Dio without a baseUrl) has no origin to keep.
+      ? uri.path
+      : Uri(
+          scheme: uri.scheme,
+          host: uri.host,
+          port: uri.hasPort ? uri.port : null,
+          path: uri.path,
+        ).toString();
 
   void _crumb(Breadcrumb breadcrumb) {
     final sink = addBreadcrumb;
@@ -83,14 +87,18 @@ class HttpErrorTracker {
     }
   }
 
-  /// Records a completed response.
+  /// Records a completed response. Pass the exception the caller will see for
+  /// it (Dio's `DioException` for a 4xx/5xx) as [error] so that an event
+  /// captured for that exception names this request.
   Future<void> recordResponse(
     String method,
     Uri uri,
     int statusCode, {
     Duration? duration,
+    Object? error,
   }) async {
     final url = sanitizeUrl(uri);
+    if (error != null) rememberFailedRequest(error, method, uri);
     final level = statusCode >= 500
         ? SeverityLevel.error
         : statusCode >= 400
@@ -131,6 +139,7 @@ class HttpErrorTracker {
   }) async {
     if (cancelled) return;
     final url = sanitizeUrl(uri);
+    rememberFailedRequest(error, method, uri);
     _crumb(Breadcrumb(
       category: 'http',
       message: '$method $url failed',

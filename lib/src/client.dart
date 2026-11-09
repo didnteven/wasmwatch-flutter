@@ -4,6 +4,7 @@ import 'version.dart';
 import 'integrations/browser_context.dart';
 import 'integrations/browser_context_source.dart' show browserContextAvailable;
 import 'integrations/device_context.dart';
+import 'integrations/failed_request.dart' show failedRequestOf;
 import 'dart:math';
 import 'event/envelope.dart';
 import 'event/error_event.dart';
@@ -172,12 +173,21 @@ class WasmWatchClient {
       final now = _clock();
       final exceptionType =
           exceptionTypeOverride ?? describeExceptionType(error);
-      final exceptionValue = exceptionValueOverride ??
+      final plainValue = exceptionValueOverride ??
           describeExceptionValue(error, exceptionType);
+      var exceptionValue = plainValue;
+      if (exceptionValueOverride == null) {
+        // Request first: the server groups app-frame-less (wasm async) errors on
+        // the first 256 characters of the message, and Dio's text alone cannot
+        // tell two endpoints apart.
+        final request = failedRequestOf(error, exceptionType,
+            normalizeHttpPath: options.normalizeHttpPath);
+        if (request != null) exceptionValue = '$request failed: $plainValue';
+      }
       if (!options.bypassProtection &&
           _loopGuard.record(
               exceptionType,
-              exceptionValue,
+              plainValue,
               stackTrace?.toString(),
               tags['wasmwatch.widget_origin'] ??
                   contexts['flutter_layout']?.toString(),
@@ -186,7 +196,7 @@ class WasmWatchClient {
         return null;
       }
       if (_deduplicator.record(
-          error, exceptionValue, stackTrace?.toString(), now,
+          error, plainValue, stackTrace?.toString(), now,
           browser: browserCapture,
           isolate: isolateCapture,
           platformDispatcher: mechanism?['type'] == 'platform_dispatcher'))

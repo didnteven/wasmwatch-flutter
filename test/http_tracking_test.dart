@@ -2,6 +2,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
+import 'package:wasmwatch/src/grouping/normalize.dart' show normalizeMessage;
 import 'package:wasmwatch/wasmwatch.dart';
 
 import '../example/dio_interceptor.dart';
@@ -65,6 +66,121 @@ void main() {
       });
     });
   }
+
+  group('request context on captured errors', () {
+    late List<ErrorEvent> events;
+    setUp(() async {
+      events = [];
+      await WasmWatch.init(
+          client: WasmWatchClient(WasmWatchOptions(
+        dsn: 'https://key@example.com/v1/project',
+        autoInstallFlutterErrorHandlers: false,
+        captureLifecycleBreadcrumbs: false,
+        captureBrowserErrors: false,
+        captureUnhandledRejections: false,
+        beforeSend: (event) {
+          events.add(event);
+          return null;
+        },
+      )));
+      addTearDown(WasmWatch.close);
+    });
+
+    DioException bad(String url, int status, {String method = 'GET'}) {
+      final options = RequestOptions(path: url, method: method);
+      return DioException.badResponse(
+          statusCode: status,
+          requestOptions: options,
+          response: Response<void>(requestOptions: options, statusCode: status));
+    }
+
+    Future<String> value(Object error) async {
+      events.clear();
+      await WasmWatch.hub.client.captureException(error);
+      return events.single.exceptionValue;
+    }
+
+    test('a DioException names its request without any wiring', () async {
+      final text =
+          await value(bad('https://api.zeil.com/jobs/123?token=s#f', 500));
+      expect(text, startsWith('GET https://api.zeil.com/jobs/{id} failed: '));
+      expect(text, contains('DioException'));
+      expect(text, isNot(contains('token')));
+      expect(text, isNot(contains('123')));
+    });
+
+    test('same status on different endpoints no longer shares a message',
+        () async {
+      final jobs = await value(bad('https://api.zeil.com/jobs', 500));
+      final profile = await value(bad('https://api.zeil.com/profile', 500));
+      expect(jobs, isNot(profile));
+      // The request leads, so the server's 256-character cut keeps it.
+      expect(normalizeMessage(jobs).substring(0, 40), contains('/jobs'));
+      expect(normalizeMessage(profile).substring(0, 40), contains('/profile'));
+      // Different ids on one endpoint still share a message.
+      expect(normalizeMessage(await value(bad('https://api.zeil.com/jobs/1', 500))),
+          normalizeMessage(await value(bad('https://api.zeil.com/jobs/2', 500))));
+    });
+
+    test('recordResponse links any exception to its request', () async {
+      final error = StateError('payment rejected');
+      await HttpErrorTracker(addBreadcrumb: (_) {}, captureServerErrors: false)
+          .recordResponse('POST', Uri.parse('https://api.zeil.com/pay/42?x=1'), 422,
+              error: error);
+      expect(await value(error),
+          'POST https://api.zeil.com/pay/{id} failed: Bad state: payment rejected');
+    });
+
+    test('recordFailure links the transport error automatically', () async {
+      final error = StateError('down');
+      await HttpErrorTracker(addBreadcrumb: (_) {}, captureTransportErrors: false)
+          .recordFailure('GET', Uri.parse('https://api.zeil.com/x'), error,
+              StackTrace.current);
+      expect(await value(error), startsWith('GET https://api.zeil.com/x failed: '));
+    });
+
+    test('honours normalizeHttpPath', () async {
+      events.clear();
+      await WasmWatch.close();
+      await WasmWatch.init(
+          client: WasmWatchClient(WasmWatchOptions(
+        dsn: 'https://key@example.com/v1/project',
+        autoInstallFlutterErrorHandlers: false,
+        captureLifecycleBreadcrumbs: false,
+        captureBrowserErrors: false,
+        captureUnhandledRejections: false,
+        normalizeHttpPath: (uri) => '/api/{v}',
+        beforeSend: (event) {
+          events.add(event);
+          return null;
+        },
+      )));
+      expect(await value(bad('https://api.zeil.com/jobs/9', 500)),
+          startsWith('GET https://api.zeil.com/api/{v} failed: '));
+    });
+
+    test('a relative request URL keeps just its path', () async {
+      expect(await value(bad('/jobs/9', 500)), startsWith('GET /jobs/{id} failed: '));
+      expect(HttpErrorTracker.sanitizeUrl(Uri.parse('/jobs/9?x=1')), '/jobs/9');
+    });
+
+    test('a DioException subclass is still recognised', () async {
+      final options = RequestOptions(path: 'https://api.zeil.com/jobs', method: 'GET');
+      expect(await value(_ZeilDioException(requestOptions: options)),
+          startsWith('GET https://api.zeil.com/jobs failed: '));
+    });
+
+    test('unrelated errors, HttpRequestException and overrides are untouched',
+        () async {
+      expect(await value(StateError('boom')), 'Bad state: boom');
+      const http = HttpRequestException('GET', 'https://a.io/x', statusCode: 503);
+      expect(await value(http), 'GET https://a.io/x returned 503');
+      events.clear();
+      await WasmWatch.hub.client.captureException(bad('https://a.io/x', 500),
+          exceptionValueOverride: 'custom');
+      expect(events.single.exceptionValue, 'custom');
+    });
+  });
 
   late List<Breadcrumb> crumbs;
   late List<Object> captured;
@@ -165,4 +281,8 @@ class _Adapter implements HttpClientAdapter {
       handler(o);
   @override
   void close({bool force = false}) {}
+}
+
+class _ZeilDioException extends DioException {
+  _ZeilDioException({required super.requestOptions});
 }

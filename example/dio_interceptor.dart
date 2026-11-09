@@ -42,7 +42,7 @@ class WasmWatchDioInterceptor extends Interceptor {
     final status = err.response?.statusCode;
     if (status != null) {
       _tracker.recordResponse(options.method, options.uri, status,
-          duration: _elapsed(options));
+          duration: _elapsed(options), error: err);
     } else {
       _tracker.recordFailure(options.method, options.uri, err, err.stackTrace,
           cancelled: err.type == DioExceptionType.cancel,

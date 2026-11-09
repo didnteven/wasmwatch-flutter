@@ -1,3 +1,14 @@
+## 0.8.3
+
+Use with `wasmwatch_native` 0.3.0 (same repository and tag).
+
+- Errors from failed HTTP requests name the request. A `DioException` reads `DioException [bad response]: …` with a status but no URL, so on web builds where the stack has no app frame (dart2wasm async errors) every failure with the same status landed in one issue whatever endpoint it came from. The event message now starts with `GET https://host/templated/{id} failed: `, using the same query-free, templated URL as `HttpRequestException` (`normalizeHttpPath` applies). The server groups on the first 256 characters of that message, so endpoints separate and different ids on one endpoint still merge.
+  - `DioException` needs no wiring: its own `requestOptions` are read (verified in a `--minify` dart2wasm build).
+  - Any other error is linked when you report it to `HttpErrorTracker`: `recordFailure` does it automatically, and `recordResponse` takes a new optional `error:`. The example Dio interceptor passes it.
+  - Events with an `exceptionValueOverride` and `HttpRequestException` are unchanged.
+  - One-time effect: a web issue that grouped on that message (no app frame) stops receiving new events after you upgrade, and per-endpoint issues start instead; resolved/ignored state and assignments stay on the old issue. Errors with an app frame group on the frame and are not affected.
+  - A relative request URL (Dio without a `baseUrl`) is reported as its path instead of a malformed `///path`; `HttpRequestException` messages benefit too.
+
 ## 0.8.2
 
 Use with `wasmwatch_native` 0.3.0 (same repository and tag).
