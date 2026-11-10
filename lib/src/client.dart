@@ -149,6 +149,21 @@ class WasmWatchClient {
         dartImage: image.isEmpty ? null : image.first.toJson());
   }
 
+  /// Tag the server groups on instead of the stack or message (see
+  /// `captureException(groupKey:)`). Also settable on a scope.
+  static const groupKeyTag = 'wasmwatch.group_key';
+
+  static String? _cleanGroupKey(String? key) {
+    final trimmed = key?.trim();
+    if (trimmed == null || trimmed.isEmpty) return null;
+    // Cut by code points, as the server does, so a surrogate pair is never split.
+    final runes = trimmed.runes;
+    return runes.length > 128 ? String.fromCharCodes(runes.take(128)) : trimmed;
+  }
+
+  /// [groupKey] names the failing site (for example `'loadJobs'`). Events with
+  /// the same exception type and key form one issue, whatever their message
+  /// or stack. Use it where dart2wasm hides the app frame (async errors).
   Future<String?> captureException(
     Object error, {
     StackTrace? stackTrace,
@@ -159,6 +174,7 @@ class WasmWatchClient {
     Map<String, Object?> contexts = const {},
     Map<String, Object?> extra = const {},
     Map<String, String> tags = const {},
+    String? groupKey,
     Zone? captureZone,
     String? exceptionTypeOverride,
     String? exceptionValueOverride,
@@ -274,6 +290,7 @@ class WasmWatchClient {
                 key == 'device' ? 'device.type' : key: name,
           ...activeScope.tags,
           ...tags,
+          if (_cleanGroupKey(groupKey) case final key?) groupKeyTag: key,
           if (usedCaptureTimeStack) 'wasmwatch.stack_trace_origin': 'capture',
         },
         extra: {...activeScope.extra, ...extra},

@@ -12,11 +12,11 @@ dependencies:
   wasmwatch:
     git:
       url: https://github.com/didnteven/wasmwatch-flutter.git
-      ref: v0.8.3
+      ref: v0.8.4
   wasmwatch_native:
     git:
       url: https://github.com/didnteven/wasmwatch-flutter.git
-      ref: v0.8.3
+      ref: v0.8.4
       path: wasmwatch_native
 ```
 

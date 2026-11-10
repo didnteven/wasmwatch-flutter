@@ -1,3 +1,10 @@
+## 0.8.4
+
+Use with `wasmwatch_native` 0.3.0 (same repository and tag). Needs an ingestor that reads the `wasmwatch.group_key` tag; without one the key is ignored and grouping is unchanged.
+
+- `captureException(..., groupKey: 'loadJobs')` names the failing site. The server groups on exception type plus key instead of the stack or message, which fixes dart2wasm async errors that have no app frame: same message from different sites no longer merges, and a changing id or name in the message no longer splits one site. Optional; unset behaves as before. The key is sent as the `wasmwatch.group_key` tag (trimmed, 128 code points) and outranks the stack, so use one stable name per site. Native crashes ignore it.
+- Adding a key to an existing error moves new events to a new issue; the old issue stops receiving them.
+
 ## 0.8.3
 
 Use with `wasmwatch_native` 0.3.0 (same repository and tag).

@@ -12,7 +12,7 @@ dependencies:
   wasmwatch:
     git:
       url: https://github.com/didnteven/wasmwatch-flutter.git
-      ref: v0.8.3
+      ref: v0.8.4
 ```
 
 Then run `flutter pub get`.
@@ -116,11 +116,11 @@ dependencies:
   wasmwatch:
     git:
       url: https://github.com/didnteven/wasmwatch-flutter.git
-      ref: v0.8.3
+      ref: v0.8.4
   wasmwatch_native:
     git:
       url: https://github.com/didnteven/wasmwatch-flutter.git
-      ref: v0.8.3
+      ref: v0.8.4
       path: wasmwatch_native
 ```
 
@@ -146,6 +146,22 @@ try {
   await WasmWatch.captureException(error, stackTrace: stack);
 }
 ```
+
+### Group async errors by call site (web)
+
+dart2wasm async errors have no app frame, so the server can only group them on
+the message: the same message from two places merges, and an id or name inside
+a message splits one place into many issues. Name the site yourself:
+
+```dart
+await WasmWatch.captureException(error, stackTrace: stack, groupKey: 'loadJobs');
+```
+
+Events with the same exception type and `groupKey` are one issue, whatever the
+message or stack. It is optional, and apps that don't set it group as before.
+The key outranks the stack, so give each site its own stable name, never a
+value that varies per event (an id would make one issue per id). Keys are
+trimmed and cut at 128 characters. Native crashes ignore it.
 
 ## Track HTTP errors (`http` and Dio)
 

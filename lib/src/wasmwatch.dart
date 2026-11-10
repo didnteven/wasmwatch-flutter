@@ -285,6 +285,7 @@ class WasmWatch {
     Object error, {
     StackTrace? stackTrace,
     String? hint,
+    String? groupKey,
     FutureOr<void> Function(Scope scope)? withScope,
   }) async {
     if (withScope == null)
@@ -292,6 +293,7 @@ class WasmWatch {
         error,
         stackTrace: stackTrace,
         hint: hint,
+        groupKey: groupKey,
       );
     return hub.withScope((scope) async {
       await withScope(scope);
@@ -299,6 +301,7 @@ class WasmWatch {
         error,
         stackTrace: stackTrace,
         hint: hint,
+        groupKey: groupKey,
         scope: scope,
       );
     });
