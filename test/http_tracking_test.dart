@@ -109,6 +109,21 @@ void main() {
       expect(text, isNot(contains('123')));
     });
 
+    test('a failed request is also sent as a tag for the server to group on',
+        () async {
+      events.clear();
+      await WasmWatch.hub.client
+          .captureException(bad('https://api.zeil.com/jobs/7?x=1', 500));
+      await WasmWatch.hub.client.captureException(StateError('plain'));
+      expect(events.first.tags['wasmwatch.request'],
+          'GET https://api.zeil.com/jobs/{id}');
+      expect(events.last.tags, isNot(contains('wasmwatch.request')));
+      await WasmWatch.hub.client.captureException(
+          const HttpRequestException('POST', 'https://api.zeil.com/pay/9?x=1'));
+      expect(events.last.tags['wasmwatch.request'],
+          'POST https://api.zeil.com/pay/{id}');
+    });
+
     test('same status on different endpoints no longer shares a message',
         () async {
       final jobs = await value(bad('https://api.zeil.com/jobs', 500));

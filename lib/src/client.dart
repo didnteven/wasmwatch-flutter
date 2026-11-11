@@ -5,6 +5,7 @@ import 'integrations/browser_context.dart';
 import 'integrations/browser_context_source.dart' show browserContextAvailable;
 import 'integrations/device_context.dart';
 import 'integrations/failed_request.dart' show failedRequestOf;
+import 'integrations/http_tracking.dart' show HttpRequestException;
 import 'dart:math';
 import 'event/envelope.dart';
 import 'event/error_event.dart';
@@ -149,21 +150,6 @@ class WasmWatchClient {
         dartImage: image.isEmpty ? null : image.first.toJson());
   }
 
-  /// Tag the server groups on instead of the stack or message (see
-  /// `captureException(groupKey:)`). Also settable on a scope.
-  static const groupKeyTag = 'wasmwatch.group_key';
-
-  static String? _cleanGroupKey(String? key) {
-    final trimmed = key?.trim();
-    if (trimmed == null || trimmed.isEmpty) return null;
-    // Cut by code points, as the server does, so a surrogate pair is never split.
-    final runes = trimmed.runes;
-    return runes.length > 128 ? String.fromCharCodes(runes.take(128)) : trimmed;
-  }
-
-  /// [groupKey] names the failing site (for example `'loadJobs'`). Events with
-  /// the same exception type and key form one issue, whatever their message
-  /// or stack. Use it where dart2wasm hides the app frame (async errors).
   Future<String?> captureException(
     Object error, {
     StackTrace? stackTrace,
@@ -174,6 +160,7 @@ class WasmWatchClient {
     Map<String, Object?> contexts = const {},
     Map<String, Object?> extra = const {},
     Map<String, String> tags = const {},
+    @Deprecated('Ignored since 0.8.5: web async errors group on where they were caught.')
     String? groupKey,
     Zone? captureZone,
     String? exceptionTypeOverride,
@@ -192,14 +179,20 @@ class WasmWatchClient {
       final plainValue = exceptionValueOverride ??
           describeExceptionValue(error, exceptionType);
       var exceptionValue = plainValue;
-      if (exceptionValueOverride == null) {
-        // Request first: the server groups app-frame-less (wasm async) errors on
-        // the first 256 characters of the message, and Dio's text alone cannot
-        // tell two endpoints apart.
-        final request = failedRequestOf(error, exceptionType,
-            normalizeHttpPath: options.normalizeHttpPath);
-        if (request != null) exceptionValue = '$request failed: $plainValue';
-      }
+      // Request first: the server groups app-frame-less (wasm async) errors on
+      // the first 256 characters of the message, and Dio's text alone cannot
+      // tell two endpoints apart.
+      final request = exceptionValueOverride == null
+          ? failedRequestOf(error, exceptionType,
+              normalizeHttpPath: options.normalizeHttpPath)
+          : null;
+      if (request != null) exceptionValue = '$request failed: $plainValue';
+      // HttpRequestException names its request in its own message; the tag lets
+      // the server tell it apart too when it groups on the capture site.
+      final requestTag = request ??
+          (error is HttpRequestException && exceptionValueOverride == null
+              ? '${error.method} ${error.templatedUrl}'
+              : null);
       if (!options.bypassProtection &&
           _loopGuard.record(
               exceptionType,
@@ -246,6 +239,15 @@ class WasmWatchClient {
             .toList();
       }
       frames = frames.take(200).toList();
+      // dart2wasm drops the throw site of an awaited error, leaving only runtime
+      // frames. The stack at this call still names the app code that caught and
+      // reported it, so send it too; the server uses it only when the error's own
+      // stack has no app frame.
+      final captureFrames = kIsWeb && stackTrace != null
+          ? WasmStackFrameParser.parse(StackTrace.current.toString())
+              .take(12)
+              .toList()
+          : const <RawStackFrame>[];
       final activeScope = scope ?? hub?.scope ?? Scope();
       String? symbol;
       for (final frame in frames) {
@@ -290,13 +292,14 @@ class WasmWatchClient {
                 key == 'device' ? 'device.type' : key: name,
           ...activeScope.tags,
           ...tags,
-          if (_cleanGroupKey(groupKey) case final key?) groupKeyTag: key,
+          if (requestTag != null) 'wasmwatch.request': requestTag,
           if (usedCaptureTimeStack) 'wasmwatch.stack_trace_origin': 'capture',
         },
         extra: {...activeScope.extra, ...extra},
         user: activeScope.user,
         fingerprint: Fingerprinter.fingerprint(
             exceptionType: exceptionType, culpritSymbol: symbol),
+        captureFrames: captureFrames,
       );
       return _runInternal(() async {
         final processed = options.beforeSend == null

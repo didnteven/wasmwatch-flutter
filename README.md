@@ -12,7 +12,7 @@ dependencies:
   wasmwatch:
     git:
       url: https://github.com/didnteven/wasmwatch-flutter.git
-      ref: v0.8.4
+      ref: v0.8.5
 ```
 
 Then run `flutter pub get`.
@@ -116,11 +116,11 @@ dependencies:
   wasmwatch:
     git:
       url: https://github.com/didnteven/wasmwatch-flutter.git
-      ref: v0.8.4
+      ref: v0.8.5
   wasmwatch_native:
     git:
       url: https://github.com/didnteven/wasmwatch-flutter.git
-      ref: v0.8.4
+      ref: v0.8.5
       path: wasmwatch_native
 ```
 
@@ -147,21 +147,17 @@ try {
 }
 ```
 
-### Group async errors by call site (web)
+### Web async errors (dart2wasm)
 
-dart2wasm async errors have no app frame, so the server can only group them on
-the message: the same message from two places merges, and an id or name inside
-a message splits one place into many issues. Name the site yourself:
-
-```dart
-await WasmWatch.captureException(error, stackTrace: stack, groupKey: 'loadJobs');
-```
-
-Events with the same exception type and `groupKey` are one issue, whatever the
-message or stack. It is optional, and apps that don't set it group as before.
-The key outranks the stack, so give each site its own stable name, never a
-value that varies per event (an id would make one issue per id). Keys are
-trimmed and cut at 128 characters. Native crashes ignore it.
+dart2wasm drops the throw site of an awaited error: its own stack holds only
+runtime frames. The SDK therefore also sends the stack at the `captureException`
+call, which names the app code that caught and reported the error. When the
+error's own stack has no app frame, the server groups on the first two app
+frames of that capture stack (plus the failed request, if any), so errors
+reported from different places no longer merge and a changing id or name in
+the message no longer splits one place. Nothing to configure. Errors that are
+never caught (uncaught async throws) have no app frame anywhere and still group
+by message.
 
 ## Track HTTP errors (`http` and Dio)
 

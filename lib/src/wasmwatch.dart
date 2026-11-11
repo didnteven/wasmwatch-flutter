@@ -285,6 +285,7 @@ class WasmWatch {
     Object error, {
     StackTrace? stackTrace,
     String? hint,
+    @Deprecated('Ignored since 0.8.5: web async errors group on where they were caught.')
     String? groupKey,
     FutureOr<void> Function(Scope scope)? withScope,
   }) async {
@@ -293,7 +294,6 @@ class WasmWatch {
         error,
         stackTrace: stackTrace,
         hint: hint,
-        groupKey: groupKey,
       );
     return hub.withScope((scope) async {
       await withScope(scope);
@@ -301,7 +301,6 @@ class WasmWatch {
         error,
         stackTrace: stackTrace,
         hint: hint,
-        groupKey: groupKey,
         scope: scope,
       );
     });

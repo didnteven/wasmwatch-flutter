@@ -22,6 +22,7 @@ class ErrorEvent {
     this.user,
     this.level = SeverityLevel.error,
     this.fingerprint,
+    this.captureFrames = const [],
     this.mechanism,
     this.exceptionValues,
   });
@@ -43,6 +44,9 @@ class ErrorEvent {
   final WasmWatchUser? user;
   final SeverityLevel level;
   final String? fingerprint;
+
+  /// Stack at the capture call (web only); see `captureException`.
+  final List<RawStackFrame> captureFrames;
   final Map<String, Object?>? mechanism;
 
   Map<String, Object?> toJson({bool scrubPii = true}) {
@@ -50,6 +54,8 @@ class ErrorEvent {
     final extensions = <String, Object?>{
       if (extra.isNotEmpty) 'extra': clean(extra),
       if (fingerprint != null) 'fingerprint_hint': fingerprint,
+      if (captureFrames.isNotEmpty)
+        'capture_frames': captureFrames.map((frame) => frame.toJson()).toList(),
     };
     return <String, Object?>{
       'event_id': eventId,

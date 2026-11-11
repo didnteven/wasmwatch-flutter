@@ -1,3 +1,12 @@
+## 0.8.5
+
+Use with `wasmwatch_native` 0.3.0 (same repository and tag). Needs an ingestor that reads `extensions.capture_frames`; against an older one grouping is unchanged.
+
+- Web async errors group on where they were caught. dart2wasm keeps no throw site for an awaited error, so its stack is runtime frames only and grouping fell back to the message (same message from two places merged; an id in the message split one place). The SDK now also sends the stack taken at the `captureException` call (`extensions.capture_frames`, web only), and the server groups on its first two app frames when the error's own stack has none. A failed HTTP request is sent as the `wasmwatch.request` tag and is part of that grouping, so one shared interceptor still splits endpoints.
+- `captureException(groupKey:)` from 0.8.4 is deprecated and ignored (still accepted, so nothing stops compiling); the server ignores the `wasmwatch.group_key` tag. Capture-site grouping replaces it. `HttpRequestException` events carry the request tag too.
+- One-time effect: web issues that grouped on the message start new issues grouped on the catch site.
+- Still not recoverable: uncaught async throws have no app frame in either stack and keep grouping on the message.
+
 ## 0.8.4
 
 Use with `wasmwatch_native` 0.3.0 (same repository and tag). Needs an ingestor that reads the `wasmwatch.group_key` tag; without one the key is ignored and grouping is unchanged.
